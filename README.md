@@ -75,8 +75,6 @@ xattr -cr /Applications/Sidecar.app
 
 Upon opening the application, you will be greeted by the onboarding guide containing active keyboard hotkeys.
 
-![Sidecar Onboarding](docs/tutorial.png)
-
 1. **System Permissions**: Go to `System Settings → Privacy & Security`. Grant **Microphone** and **Screen Recording** access to Sidecar.
 2. **Zoom Configuration**: To hide Sidecar in Zoom, open Zoom Settings, navigate to `Share Screen → Advanced`, and set **Screen capture mode** to `"Advanced capture with window filtering."`
 
