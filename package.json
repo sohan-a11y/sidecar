@@ -1,7 +1,7 @@
 {
-  "name": "chaaya",
+  "name": "sidecar",
   "version": "0.1.0",
-  "description": "Chaaya — open-source macOS invisible AI overlay — three separate inputs (screen, mic, system audio) into an LLM. Free, self-hosted AI copilot. Forked from cue (Blueturboguy07/cue).",
+  "description": "Sidecar — open-source macOS invisible AI overlay — three separate inputs (screen, mic, system audio) into an LLM. Free, self-hosted AI copilot. Forked from cue (Blueturboguy07/cue).",
   "license": "GPL-3.0-or-later",
   "author": "Ganeshp000",
   "main": "main.js",
@@ -11,8 +11,8 @@
     "dist": "electron-builder --mac zip"
   },
   "build": {
-    "appId": "com.chaaya.overlay",
-    "productName": "Chaaya",
+    "appId": "com.sidecar.overlay",
+    "productName": "Sidecar",
     "asar": false,
     "files": [
       "main.js",
@@ -30,9 +30,9 @@
       "identity": null,
       "extendInfo": {
         "LSUIElement": true,
-        "NSMicrophoneUsageDescription": "Chaaya transcribes your microphone so it can help you in conversations.",
-        "NSCameraUsageDescription": "Chaaya does not use the camera.",
-        "NSAudioCaptureUsageDescription": "Chaaya captures system audio to transcribe the other participant in a call."
+        "NSMicrophoneUsageDescription": "Sidecar transcribes your microphone so it can help you in conversations.",
+        "NSCameraUsageDescription": "Sidecar does not use the camera.",
+        "NSAudioCaptureUsageDescription": "Sidecar captures system audio to transcribe the other participant in a call."
       }
     }
   },
