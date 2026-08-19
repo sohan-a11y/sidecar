@@ -1,6 +1,7 @@
-const { OpenAI } = require('openai');
-const { Anthropic } = require('@anthropic-ai/sdk');
-const { GoogleGenAI } = require('@google/genai');
+const Providers = require('./providers');
+const { guessVision } = require('./providers/util');
+const SettingsManager = require('./SettingsManager');
+const RateLimiter = require('./RateLimiter');
 
 const MODES = {
   assist: {
@@ -35,143 +36,184 @@ const MODES = {
   }
 };
 
+/**
+ * Provider-agnostic entry point for every chat completion in the app.
+ * Callers pass a mode, messages and optional images; provider selection, vision
+ * capability gating and rate limiting all happen here (BUILD-PLAN 0 Contract).
+ */
 class LlmService {
   constructor() {
     this.modes = MODES;
+    // Emits user-visible notices; IpcRouter wires this to WindowManager.send('status').
+    this.onStatus = null;
+    this._visionNoticed = new Set();
   }
 
-  async streamCompletion(options, onToken) {
-    const { provider, apiKey, model, mode, transcript, userText, imageDataUrl } = options;
-    const modeConfig = this.modes[mode];
+  status(message) {
+    if (typeof this.onStatus === 'function') this.onStatus(message);
+  }
 
-    if (!modeConfig) {
-      throw new Error(`Unknown mode: ${mode}`);
+  /**
+   * Does this model accept image input?
+   * Manual override beats the cached provider metadata, which beats the id heuristic.
+   */
+  modelHasVision(providerId, modelId) {
+    if (!modelId) return false;
+    const settings = SettingsManager.get();
+    const override = (settings.llm.visionOverrides || {})[modelId];
+    if (typeof override === 'boolean') return override;
+
+    const cached = SettingsManager.cachedModels(providerId);
+    if (cached) {
+      const record = cached.models.find((m) => m.id === modelId);
+      if (record && typeof record.vision === 'boolean') return record.vision;
+    }
+    return guessVision(modelId);
+  }
+
+  /**
+   * Decide which model handles a request and whether the images survive.
+   * Never sends an image part to a model flagged text-only (BUILD-PLAN 0.3).
+   */
+  resolveTarget(eff, images) {
+    const { provider, model, visionModel } = eff.llm;
+    if (!images || images.length === 0) return { model, images: [] };
+
+    if (this.modelHasVision(provider, model)) return { model, images };
+
+    if (visionModel && this.modelHasVision(provider, visionModel)) {
+      return { model: visionModel, images, routed: true };
     }
 
-    const systemPrompt = modeConfig.systemPrompt;
-    
-    // Construct the context text prompt
+    return { model, images: [], dropped: true };
+  }
+
+  /** One notice per model, not one per keystroke. */
+  noticeOnce(key, message) {
+    if (this._visionNoticed.has(key)) return;
+    this._visionNoticed.add(key);
+    this.status(message);
+  }
+
+  resetNotices() {
+    this._visionNoticed.clear();
+  }
+
+  /**
+   * Stream a completion. Resolves when the stream ends; rejects on error or abort.
+   *   mode      — key of MODES, supplies the system prompt
+   *   messages  — [{ role: 'user' | 'assistant', content: string }]
+   *   images    — array of data URLs, subject to vision gating
+   *   signal    — AbortSignal, threaded into the provider SDK
+   *   priority  — 'user' (default) or 'auto'; user work never queues behind auto work
+   */
+  async stream({ mode, messages, images = [], signal, priority = 'user', system }, onToken) {
+    const modeConfig = this.modes[mode];
+    if (!modeConfig && !system) throw new Error(`Unknown mode: ${mode}`);
+
+    const eff = SettingsManager.effective();
+    const providerId = eff.llm.provider;
+    const adapter = Providers.get(providerId);
+
+    if (!eff.llm.apiKey && providerId !== 'custom') {
+      throw new Error(`Please provide your ${adapter.name} API key in Settings.`);
+    }
+    if (adapter.requiresBaseUrl && !eff.llm.baseUrl) {
+      throw new Error(`${adapter.name} needs a base URL — set one in Settings.`);
+    }
+
+    const target = this.resolveTarget(eff, images);
+    if (!target.model) {
+      throw new Error(`No model configured for ${adapter.name}. Pick one in Settings.`);
+    }
+
+    if (target.routed) {
+      this.noticeOnce(
+        `routed:${eff.llm.model}`,
+        `"${eff.llm.model}" has no vision support — screenshots go to "${target.model}" instead.`
+      );
+    } else if (target.dropped) {
+      this.noticeOnce(
+        `dropped:${target.model}`,
+        `"${target.model}" is text-only, so the screenshot was dropped. Set a vision model in Settings to keep screen context.`
+      );
+    }
+
+    let emitted = false;
+    const emit = (token) => {
+      emitted = true;
+      onToken(token);
+    };
+
+    return RateLimiter.schedule(
+      providerId,
+      {
+        priority,
+        signal,
+        // Retrying after tokens reached the UI would duplicate the answer.
+        canRetry: () => !emitted,
+        onRetry: ({ attempt, status }) => {
+          this.status(`${adapter.name} returned ${status || 'an error'} — retry ${attempt} of 3.`);
+        }
+      },
+      () => adapter.streamChat(
+        {
+          apiKey: eff.llm.apiKey,
+          baseUrl: eff.llm.baseUrl,
+          model: target.model,
+          system: system || modeConfig.systemPrompt,
+          messages,
+          images: target.images,
+          signal
+        },
+        emit
+      )
+    );
+  }
+
+  /**
+   * Compose the chat messages for a mode.
+   * Phase 1 replaces this with PromptBuilder; until then it reproduces the v1 prompt text.
+   */
+  buildMessages(mode, { transcript = [], userText = '' } = {}) {
+    const modeConfig = this.modes[mode];
     let promptText = '';
-    if (modeConfig.requiresTranscript && transcript && transcript.length > 0) {
-      const turns = transcript.map(t => `${t.sender === 'user' ? 'You' : 'Them'}: ${t.text}`).join('\n');
+
+    if (modeConfig.requiresTranscript && transcript.length > 0) {
+      const turns = transcript
+        .map((t) => `${t.sender === 'user' ? 'You' : 'Them'}: ${t.text}`)
+        .join('\n');
       promptText += `Dialogue log:\n${turns}\n\n`;
     } else if (modeConfig.requiresTranscript) {
-      promptText += `Dialogue log is currently empty.\n\n`;
+      promptText += 'Dialogue log is currently empty.\n\n';
     }
 
     if (mode === 'ask' && userText) {
       promptText += `User query: ${userText}`;
     } else {
-      promptText += `Provide instructions or suggestions based on this context.`;
+      promptText += 'Provide instructions or suggestions based on this context.';
     }
 
-    if (provider === 'openai') {
-      const openai = new OpenAI({ apiKey });
-      const messages = [
-        { role: 'system', content: systemPrompt },
-        {
-          role: 'user',
-          content: [
-            { type: 'text', text: promptText },
-            ...(imageDataUrl ? [{
-              type: 'image_url',
-              image_url: { url: imageDataUrl }
-            }] : [])
-          ]
-        }
-      ];
+    return [{ role: 'user', content: promptText }];
+  }
 
-      const stream = await openai.chat.completions.create({
-        model: model,
-        messages: messages,
-        stream: true
-      });
+  /** Fetch a provider's model list, cache it, and return it. */
+  async listModels(providerId, { refresh = false } = {}) {
+    const adapter = Providers.get(providerId);
+    const settings = SettingsManager.get();
+    const cached = SettingsManager.cachedModels(providerId);
 
-      for await (const chunk of stream) {
-        const token = chunk.choices[0]?.delta?.content || '';
-        if (token) onToken(token);
-      }
-    } else if (provider === 'anthropic') {
-      const anthropic = new Anthropic({ apiKey });
-      const messageContent = [
-        { type: 'text', text: promptText }
-      ];
-
-      if (imageDataUrl) {
-        const match = imageDataUrl.match(/^data:(image\/\w+);base64,(.+)$/);
-        if (match) {
-          const mediaType = match[1];
-          const base64Data = match[2];
-          messageContent.push({
-            type: 'image',
-            source: {
-              type: 'base64',
-              media_type: mediaType,
-              data: base64Data
-            }
-          });
-        }
-      }
-
-      const stream = await anthropic.messages.create({
-        model: model,
-        max_tokens: 1024,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: messageContent }],
-        stream: true
-      });
-
-      for await (const event of stream) {
-        if (event.type === 'content_block_delta' && event.delta?.text) {
-          onToken(event.delta.text);
-        }
-      }
-    } else if (provider === 'gemini') {
-      try {
-        const ai = new GoogleGenAI({ 
-          apiKey,
-          httpOptions: {
-            apiVersion: 'v1beta'
-          }
-        });
-        const contents = [promptText];
-
-        if (imageDataUrl) {
-          const match = imageDataUrl.match(/^data:(image\/\w+);base64,(.+)$/);
-          if (match) {
-            const mediaType = match[1];
-            const base64Data = match[2];
-            contents.push({
-              inlineData: {
-                mimeType: mediaType,
-                data: base64Data
-              }
-            });
-          }
-        }
-
-        const responseStream = await ai.models.generateContentStream({
-          model: model,
-          contents: contents,
-          config: {
-            systemInstruction: systemPrompt
-          }
-        });
-
-        for await (const chunk of responseStream) {
-          const token = chunk.text || '';
-          if (token) onToken(token);
-        }
-      } catch (geminiError) {
-        const errMsg = geminiError.message || String(geminiError);
-        if (errMsg.includes('404') || errMsg.includes('NOT_FOUND') || errMsg.includes('exception parsing response')) {
-          throw new Error('Gemini model not found -- it may be deprecated, check Settings');
-        }
-        throw geminiError;
-      }
-    } else {
-      throw new Error(`Unsupported model provider: ${provider}`);
+    if (!refresh && cached && Date.now() - cached.fetchedAt < 6 * 60 * 60 * 1000) {
+      return { models: cached.models, cached: true, fetchedAt: cached.fetchedAt };
     }
+
+    const apiKey = settings.llm.apiKeys[providerId] || '';
+    const models = await adapter.listModels(apiKey, { baseUrl: settings.llm.baseUrl });
+    if (models.length > 0) {
+      const entry = SettingsManager.cacheModels(providerId, models);
+      return { models, cached: false, fetchedAt: entry.fetchedAt };
+    }
+    return { models: cached ? cached.models : [], cached: true, fetchedAt: cached ? cached.fetchedAt : 0 };
   }
 }
 
