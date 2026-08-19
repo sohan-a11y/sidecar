@@ -17,7 +17,8 @@ logic only — no renderer test harness).
 
 ```
 src/main/        WindowManager, MediaCapture, TranscriptionService, LlmService,
-                 SettingsManager, ShortcutsManager, IpcRouter, RateLimiter, KeyStore, index.js
+                 SettingsManager, ShortcutsManager, IpcRouter, RateLimiter, KeyStore,
+                 ContextStore, ProfileBuilder, PromptBuilder, index.js
 src/main/providers/  Provider adapters (openai, anthropic, gemini, openaiCompatible) + registry
 src/preload/     contextBridge surface, exposed as window.sidecar
 src/renderer/    App.jsx (state coordinator) + components/, index.css (hand-rolled design system)
@@ -40,6 +41,9 @@ test/            vitest unit tests for pure main-process logic
 * Preserve the existing CSS design system in `index.css`. Add variables, don't bolt on Tailwind.
 * Every model call goes through `RateLimiter.schedule()`. Nothing calls a provider SDK directly
   outside `src/main/providers/`.
+* Every prompt is composed by `PromptBuilder.build()`. Nothing assembles prompt text by hand.
+* A system prompt is a string or an ordered list of `{ text, cacheable }` blocks. Stable content
+  comes first so provider prompt caching can reuse it; the transcript is never in a cacheable block.
 
 ## Conventions
 
@@ -52,6 +56,7 @@ test/            vitest unit tests for pure main-process logic
 * Persisted files live in `app.getPath('userData')`:
   * `sidecar-data.json` — settings (API keys encrypted via `safeStorage` where available)
   * `sidecar-usage.json` — daily request counters for the rate limiter
+  * `sidecar-context.json` — ingested documents, distilled profile, story bank, session setup
 
 ## Non-goals
 

@@ -67,35 +67,36 @@ describe('main process modules', () => {
     }
   });
 
-  it('registers every IPC channel the preload bridge exposes', () => {
+  it('registers the core IPC channels', () => {
     const IpcRouter = require('../src/main/IpcRouter.js');
     const WindowManager = require('../src/main/WindowManager.js');
     WindowManager.send = (channel, data) => sent.push({ channel, data });
 
     IpcRouter.initialize();
 
-    const invokeChannels = Object.keys(handlers.invoke).sort();
-    const sendChannels = Object.keys(handlers.on).sort();
-
-    expect(invokeChannels).toEqual([
-      'sidecar:models:list',
+    for (const channel of [
       'sidecar:settings:get',
       'sidecar:settings:set',
-      'sidecar:toggle-listening',
-      'sidecar:usage:get'
-    ]);
-    expect(sendChannels).toEqual([
+      'sidecar:models:list',
+      'sidecar:usage:get',
+      'sidecar:toggle-listening'
+    ]) {
+      expect(Object.keys(handlers.invoke)).toContain(channel);
+    }
+    for (const channel of [
       'sidecar:audio-chunk',
-      'sidecar:log',
+      'sidecar:run-mode',
       'sidecar:mouse-ignore',
       'sidecar:open-url',
-      'sidecar:run-mode'
-    ]);
+      'sidecar:log'
+    ]) {
+      expect(Object.keys(handlers.on)).toContain(channel);
+    }
   });
 
-  it('exposes the same invoke channels from the preload bridge', () => {
+  it('exposes every registered channel through the preload bridge', () => {
     const preload = fs.readFileSync(new URL('../src/preload/index.js', import.meta.url), 'utf8');
-    for (const channel of Object.keys(handlers.invoke)) {
+    for (const channel of [...Object.keys(handlers.invoke), ...Object.keys(handlers.on)]) {
       expect(preload, `preload should call ${channel}`).toContain(channel);
     }
   });

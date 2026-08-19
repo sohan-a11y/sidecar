@@ -1,6 +1,6 @@
 const { OpenAI, toFile } = require('openai');
 const fs = require('fs');
-const { attachImagesOpenAi, visionFromModelRecord, withTempWav } = require('./util');
+const { attachImagesOpenAi, visionFromModelRecord, withTempWav, systemToText } = require('./util');
 
 /**
  * OpenAI adapter. Behaviour of streamChat/transcribe is a straight lift of the pre-Phase-0
@@ -33,8 +33,9 @@ const adapter = {
 
   async streamChat({ apiKey, model, system, messages, images, signal }, onToken) {
     const client = new OpenAI({ apiKey });
+    const systemText = systemToText(system);
     const composed = [
-      ...(system ? [{ role: 'system', content: system }] : []),
+      ...(systemText ? [{ role: 'system', content: systemText }] : []),
       ...attachImagesOpenAi(messages, images)
     ];
 

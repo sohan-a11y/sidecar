@@ -1,6 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 
-export default function Composer({ userText, setUserText, isSmart, onToggleSmart, onOpenSettings, onSubmit, usage }) {
+export default function Composer({ userText, setUserText, isSmart, onToggleSmart, onOpenSettings, onSubmit, usage, hasProfile }) {
   const textareaRef = useRef(null);
 
   useEffect(() => {
@@ -61,6 +61,17 @@ export default function Composer({ userText, setUserText, isSmart, onToggleSmart
           <span>Smart Mode</span>
         </button>
         
+        <button
+          type="button"
+          className={`context-pill ${hasProfile ? 'is-active' : ''}`}
+          title={hasProfile
+            ? 'Answers use your profile. Click to review it.'
+            : 'No profile loaded — answers are generic. Click to add your resume.'}
+          onClick={onOpenSettings}
+        >
+          {hasProfile ? 'Profile on' : 'No profile'}
+        </button>
+
         <button 
           className="composer-action-btn" 
           title="Open Settings"

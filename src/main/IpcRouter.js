@@ -4,6 +4,9 @@ const WindowManager = require('./WindowManager');
 const MediaCapture = require('./MediaCapture');
 const TranscriptionService = require('./TranscriptionService');
 const LlmService = require('./LlmService');
+const PromptBuilder = require('./PromptBuilder');
+const ContextStore = require('./ContextStore');
+const ProfileBuilder = require('./ProfileBuilder');
 const RateLimiter = require('./RateLimiter');
 const Providers = require('./providers');
 const { isAbort } = require('./providers/util');
@@ -28,6 +31,7 @@ class IpcRouter {
     LlmService.onStatus = (message) => WindowManager.send('status', { message });
     TranscriptionService.onStatus = (message) => WindowManager.send('status', { message });
     RateLimiter.onChange = (snapshot) => WindowManager.send('usage', snapshot);
+    ContextStore.onChange = (view) => WindowManager.send('context:changed', view);
 
     // 1. Settings handlers — the renderer only ever sees the redacted view.
     ipcMain.handle('sidecar:settings:get', () => SettingsManager.publicView());
@@ -88,6 +92,67 @@ class IpcRouter {
 
     // 9. Rate-limit budget snapshot
     ipcMain.handle('sidecar:usage:get', () => RateLimiter.snapshot());
+
+    // 10. Context layer — documents, profile, story bank, session setup
+    ipcMain.handle('sidecar:context:get', () => ContextStore.publicView());
+
+    ipcMain.handle('sidecar:context:ingest', async (_event, { name, bytes }) => {
+      try {
+        const doc = await ContextStore.ingest(name, Buffer.from(bytes));
+        return { ok: true, document: { id: doc.id, filename: doc.filename, chars: doc.text.length } };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    });
+
+    ipcMain.handle('sidecar:context:remove', (_event, id) => {
+      ContextStore.removeDocument(id);
+      return ContextStore.publicView();
+    });
+
+    ipcMain.handle('sidecar:context:distill', async () => {
+      try {
+        const profile = await ProfileBuilder.distill(
+          ContextStore.rawText(),
+          (stage) => WindowManager.send('context:progress', { stage })
+        );
+        ContextStore.setProfile(profile);
+        return { ok: true, profile };
+      } catch (e) {
+        WindowManager.send('context:progress', { stage: '' });
+        return { ok: false, error: e.message };
+      }
+    });
+
+    ipcMain.handle('sidecar:context:profile:set', (_event, profile) => {
+      ContextStore.setProfile(profile);
+      return ContextStore.publicView();
+    });
+
+    ipcMain.handle('sidecar:context:story:save', (_event, story) => {
+      try {
+        ContextStore.upsertStory(story);
+        return { ok: true, view: ContextStore.publicView() };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    });
+
+    ipcMain.handle('sidecar:context:story:delete', (_event, id) => {
+      ContextStore.deleteStory(id);
+      return ContextStore.publicView();
+    });
+
+    ipcMain.handle('sidecar:context:session:set', (_event, patch) => {
+      ContextStore.setSession(patch);
+      return ContextStore.publicView();
+    });
+
+    ipcMain.handle('sidecar:context:clear', (_event, scope) => {
+      if (scope === 'session') ContextStore.clearSession();
+      else ContextStore.clearAll();
+      return ContextStore.publicView();
+    });
 
     this.validateConfiguredModels();
   }
@@ -234,10 +299,17 @@ class IpcRouter {
         }
       }
 
+      const prompt = PromptBuilder.build(mode, {
+        transcript: this.transcript,
+        userText,
+        images
+      });
+
       await LlmService.stream(
         {
           mode,
-          messages: LlmService.buildMessages(mode, { transcript: this.transcript, userText }),
+          system: prompt.system,
+          messages: prompt.messages,
           images,
           signal: controller.signal,
           priority

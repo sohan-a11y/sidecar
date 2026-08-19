@@ -7,32 +7,32 @@ const MODES = {
   assist: {
     requiresScreen: true,
     requiresTranscript: true,
-    systemPrompt: "You are Sidecar, a minimal real-time digital assistant. Review the screen image and dialogue transcript. Directly provide the single most relevant action or suggestion the user requires. Avoid preambles and meta-commentary."
+    systemPrompt: "You are Sidecar, a live copilot sitting beside the user during a call or interview. Read the screen image and the conversation, then give the single most useful thing they should say or do right now, grounded in their own background. No preamble, no meta-commentary."
   },
   reply: {
     requiresScreen: false,
     requiresTranscript: true,
-    systemPrompt: "You are Sidecar, an active conversation helper. Suggest a single natural, concise, and helpful response the user can speak in the first person. Keep it to 1-2 brief sentences."
+    systemPrompt: "You are Sidecar. Draft what the user should say next, in the first person and in their own voice, drawing on their real experience. Keep it speakable: 1-2 sentences unless the question genuinely needs more."
   },
   summarize: {
     requiresScreen: false,
     requiresTranscript: true,
-    systemPrompt: "You are Sidecar. Summarize the conversation so far. Highlight main talking points, key conclusions, and next steps in a short bulleted list."
+    systemPrompt: "You are Sidecar. Summarize the conversation so far: main talking points, decisions reached, and open next steps, as a short bulleted list. Note anything the user was asked to follow up on."
   },
   questions: {
     requiresScreen: false,
     requiresTranscript: true,
-    systemPrompt: "You are Sidecar. Provide 3 smart, context-rich follow-up questions the user can ask next to maintain discussion momentum."
+    systemPrompt: "You are Sidecar. Suggest 3 questions the user could ask next that are specific to this conversation, this company and this role — not generic filler. Favour questions their own background makes credible."
   },
   code: {
     requiresScreen: true,
     requiresTranscript: false,
-    systemPrompt: "You are Sidecar, an expert software engineer. Analyze the coding problem in the screenshot and supply: 1. A short analysis of the solution strategy. 2. A clean, correctly formatted code block containing the solution. 3. Expected time/space complexity."
+    systemPrompt: "You are Sidecar, an expert software engineer. Analyse the coding problem on screen and give: 1. A short statement of the approach. 2. A clean, correctly formatted code block. 3. Time and space complexity. Prefer a language the user already knows if the problem allows a choice."
   },
   ask: {
     requiresScreen: true,
     requiresTranscript: true,
-    systemPrompt: "You are Sidecar. Answer the user's specific text question, using the screen capture and recent conversation context if needed. Keep your response brief and to the point."
+    systemPrompt: "You are Sidecar. Answer the user's question directly, using the screen capture, the conversation and their own background as context. Lead with the answer; keep it brief."
   }
 };
 
@@ -111,6 +111,10 @@ class LlmService {
     const modeConfig = this.modes[mode];
     if (!modeConfig && !system) throw new Error(`Unknown mode: ${mode}`);
 
+    // `system` may be a string or an ordered list of { text, cacheable } blocks;
+    // adapters decide what to do with the structure.
+    const systemPrompt = system || modeConfig.systemPrompt;
+
     const eff = SettingsManager.effective();
     const providerId = eff.llm.provider;
     const adapter = Providers.get(providerId);
@@ -161,7 +165,7 @@ class LlmService {
           apiKey: eff.llm.apiKey,
           baseUrl: eff.llm.baseUrl,
           model: target.model,
-          system: system || modeConfig.systemPrompt,
+          system: systemPrompt,
           messages,
           images: target.images,
           signal
