@@ -15,6 +15,7 @@ const { isAbort } = require('./providers/util');
 
 const SttEngines = require('./stt');
 const AutoAnswer = require('./AutoAnswer');
+const ShortcutsManager = require('./ShortcutsManager');
 
 class IpcRouter {
   constructor() {
@@ -171,6 +172,66 @@ class IpcRouter {
       WindowManager.send('llm:replace-last', {});
       this.executeMode(mode, userText, { preset });
     });
+
+    // 13. Capture target and overlay
+    ipcMain.handle('sidecar:capture:sources', () => MediaCapture.listSources());
+
+    ipcMain.handle('sidecar:capture:pick-region', async () => {
+      const region = await WindowManager.openRegionPicker();
+      if (region) {
+        SettingsManager.set({ capture: { region } });
+        MediaCapture.resetChangeDetection();
+      }
+      return SettingsManager.get().capture;
+    });
+
+    ipcMain.handle('sidecar:capture:clear-region', () => {
+      SettingsManager.set({ capture: { region: null } });
+      MediaCapture.resetChangeDetection();
+      return SettingsManager.get().capture;
+    });
+
+    ipcMain.on('sidecar:capture:region-selected', (_event, region) => {
+      WindowManager.resolveRegion(region);
+    });
+
+    ipcMain.on('sidecar:capture:region-cancel', () => {
+      WindowManager.resolveRegion(null);
+    });
+
+    ipcMain.handle('sidecar:overlay:apply', (_event, patch) => {
+      SettingsManager.set({ overlay: patch });
+      WindowManager.applyOverlaySettings();
+      return SettingsManager.get().overlay;
+    });
+
+    ipcMain.handle('sidecar:overlay:displays', () => WindowManager.listDisplays());
+
+    ipcMain.handle('sidecar:overlay:place', (_event, { displayId, position }) => {
+      WindowManager.placeOn(displayId, position);
+      return SettingsManager.get().overlay;
+    });
+
+    ipcMain.handle('sidecar:overlay:toggle', () => WindowManager.toggleVisibility());
+
+    ipcMain.handle('sidecar:shortcuts:list', () => ({
+      actions: ShortcutsManager.actions(),
+      bindings: SettingsManager.get().shortcuts,
+      conflicts: ShortcutsManager.getConflicts()
+    }));
+
+    ipcMain.handle('sidecar:shortcuts:set', (_event, bindings) => {
+      SettingsManager.set({ shortcuts: bindings });
+      const conflicts = ShortcutsManager.apply();
+      if (conflicts.length > 0) {
+        WindowManager.send('status', {
+          message: `${conflicts.length} shortcut${conflicts.length > 1 ? 's' : ''} could not be registered — ${conflicts[0].reason}.`
+        });
+      }
+      return { bindings: SettingsManager.get().shortcuts, conflicts };
+    });
+
+    ipcMain.handle('sidecar:shortcuts:probe', (_event, accelerator) => ShortcutsManager.probe(accelerator));
 
     ipcMain.on('sidecar:thread:new', () => {
       this.thread = [];
@@ -479,7 +540,13 @@ class IpcRouter {
       const images = [];
       if (modeConfig.requiresScreen) {
         try {
-          images.push(await MediaCapture.takeScreenshot());
+          // A manual press always wants a fresh look; auto-answers may skip an
+          // unchanged screen rather than paying for the same pixels twice.
+          const shot = await MediaCapture.capture({ force: !auto });
+          if (shot.dataUrl) images.push(shot.dataUrl);
+          else if (shot.unchanged) {
+            WindowManager.send('status', { message: 'Screen unchanged — answering without a new screenshot.' });
+          }
         } catch (e) {
           WindowManager.send('status', { message: 'Screen Recording permission is required for screenshot features.' });
         }

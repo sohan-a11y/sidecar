@@ -4,6 +4,7 @@ import KeyField from './settings/KeyField';
 import ContextTab from './settings/ContextTab';
 import SessionsTab from './settings/SessionsTab';
 import SpeechTab from './settings/SpeechTab';
+import CaptureTab from './settings/CaptureTab';
 
 const KEY_PLACEHOLDERS = {
   openai: 'sk-...',
@@ -28,6 +29,7 @@ const TABS = [
   ['sessions', 'Sessions'],
   ['models', 'Models'],
   ['speech', 'Speech'],
+  ['screen', 'Screen'],
   ['limits', 'Limits']
 ];
 
@@ -67,6 +69,8 @@ export default function SettingsModal({ isOpen, onClose, sidecar }) {
         stt: JSON.parse(JSON.stringify(data.stt)),
         rateLimits: JSON.parse(JSON.stringify(data.rateLimits)),
         autoAnswer: JSON.parse(JSON.stringify(data.autoAnswer)),
+        capture: JSON.parse(JSON.stringify(data.capture)),
+        overlay: JSON.parse(JSON.stringify(data.overlay)),
         sessions: JSON.parse(JSON.stringify(data.sessions)),
         transcript: JSON.parse(JSON.stringify(data.transcript))
       });
@@ -167,6 +171,7 @@ export default function SettingsModal({ isOpen, onClose, sidecar }) {
         },
         rateLimits: draft.rateLimits,
         autoAnswer: draft.autoAnswer,
+        capture: draft.capture,
         sessions: draft.sessions,
         transcript: draft.transcript
       };
@@ -326,6 +331,20 @@ export default function SettingsModal({ isOpen, onClose, sidecar }) {
               patchStt={patchStt}
               keyDraftValue={keyDraftValue}
               setKeyDraft={setKeyDraft}
+            />
+          )}
+
+          {tab === 'screen' && (
+            <CaptureTab
+              sidecar={sidecar}
+              capture={draft.capture}
+              overlay={draft.overlay}
+              onCaptureChange={(capture) => setDraft((d) => ({ ...d, capture }))}
+              onOverlayChange={async (overlay) => {
+                setDraft((d) => ({ ...d, overlay }));
+                // Opacity and text size should react as the slider moves.
+                await sidecar.overlay.apply(overlay);
+              }}
             />
           )}
 
