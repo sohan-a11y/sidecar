@@ -15,7 +15,10 @@ const ALLOWED_EVENTS = [
   'context:changed',
   'context:progress',
   'session:state',
-  'auto-answer:fired'
+  'auto-answer:fired',
+  'llm:queue',
+  'llm:replace-last',
+  'thread:cleared'
 ];
 
 contextBridge.exposeInMainWorld('sidecar', {
@@ -49,6 +52,9 @@ contextBridge.exposeInMainWorld('sidecar', {
     export: (id, format) => ipcRenderer.invoke('sidecar:session:export', { id, format })
   },
   runMode: (payload) => ipcRenderer.send('sidecar:run-mode', payload),
+  cancelAnswer: () => ipcRenderer.send('sidecar:llm:cancel'),
+  regenerate: (preset) => ipcRenderer.send('sidecar:llm:regenerate', { preset }),
+  newThread: () => ipcRenderer.send('sidecar:thread:new'),
   toggleListening: () => ipcRenderer.invoke('sidecar:toggle-listening'),
   sendAudioChunk: (source, arrayBuffer) => ipcRenderer.send('sidecar:audio-chunk', { source, arrayBuffer }),
   sendVadState: (source, state) => ipcRenderer.send('sidecar:vad', { source, state }),

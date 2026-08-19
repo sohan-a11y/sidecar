@@ -64,6 +64,15 @@ class SettingsManager {
         custom: { rpm: 60, rpd: 1000 }
       },
 
+      answers: {
+        // Nobody can read prose while talking, so bullets are the default.
+        preset: 'speak-points',
+        // Prior turns sent back so follow-ups work. Counted in messages, not exchanges.
+        historyDepth: 8,
+        // Per-mode overrides; a coding answer is not a set of speaking points.
+        modePresets: { code: 'code', summarize: 'brief', questions: 'brief' }
+      },
+
       autoAnswer: {
         // Off by default: it spends the user's quota without them pressing anything.
         enabled: false,
