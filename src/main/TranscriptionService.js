@@ -1,87 +1,86 @@
-const { OpenAI } = require('openai');
-const { GoogleGenAI } = require('@google/genai');
-const fs = require('fs');
-const path = require('path');
-const { app } = require('electron');
+const Providers = require('./providers');
+const SettingsManager = require('./SettingsManager');
+const RateLimiter = require('./RateLimiter');
 
+// Cheap pre-gate so dead air never costs a request. Phase 3 replaces this with real VAD.
+const SILENCE_RMS_THRESHOLD = 250;
+
+/**
+ * Turns raw 16 kHz mono Int16 PCM into text via whichever adapter the user configured
+ * for speech-to-text. STT provider and key are independent of the chat provider
+ * (BUILD-PLAN 0.4), so picking Anthropic for chat no longer kills transcription.
+ */
 class TranscriptionService {
-  async transcribe(pcmBuffer, provider, apiKey, sourceChannel = 'unknown') {
+  constructor() {
+    this.onStatus = null;
+  }
+
+  status(message) {
+    if (typeof this.onStatus === 'function') this.onStatus(message);
+  }
+
+  /** Which STT provider is configured, and can it actually run? */
+  readiness() {
+    const eff = SettingsManager.effective();
+    const { provider, apiKey, baseUrl } = eff.stt;
+
+    if (!Providers.has(provider)) {
+      return { ready: false, reason: `Unknown transcription provider "${provider}". Pick one in Settings.` };
+    }
+    const adapter = Providers.get(provider);
+    if (!adapter.capabilities.transcription || typeof adapter.transcribe !== 'function') {
+      return { ready: false, reason: `${adapter.name} cannot transcribe audio. Choose another transcription provider in Settings.` };
+    }
+    if (!apiKey && provider !== 'custom') {
+      return { ready: false, reason: `Transcription needs a ${adapter.name} API key. Add one in Settings.` };
+    }
+    if (adapter.requiresBaseUrl && !baseUrl) {
+      return { ready: false, reason: `${adapter.name} transcription needs a base URL. Add one in Settings.` };
+    }
+    return { ready: true, provider, adapter, eff };
+  }
+
+  /**
+   * @param {Buffer} pcmBuffer raw 16-bit little-endian mono PCM at 16 kHz
+   * @param {'user'|'system'} sourceChannel which side of the call this came from
+   * @returns {Promise<string>} transcript text, or '' when the chunk was silence
+   */
+  async transcribe(pcmBuffer, sourceChannel = 'unknown') {
     if (!pcmBuffer || pcmBuffer.length === 0) return '';
-    
+
     const rms = this.calculateRms(pcmBuffer);
-    console.log(`[TranscriptionService] Channel "${sourceChannel}" chunk RMS level = ${rms.toFixed(2)} (Gate threshold = 250)`);
+    if (rms < SILENCE_RMS_THRESHOLD) return '';
 
-    // Silence gate: skip transcribing dead air
-    if (rms < 250) {
-      return '';
+    const state = this.readiness();
+    if (!state.ready) {
+      const err = new Error(state.reason);
+      err.code = 'STT_NOT_READY';
+      throw err;
     }
 
-    const wavData = this.pcmToWav(pcmBuffer, 16000);
+    const { adapter, eff, provider } = state;
+    const wav = this.pcmToWav(pcmBuffer, 16000);
 
-    // Save temporary wav file for the provider APIs
-    const tempFile = path.join(
-      app.getPath('temp'), 
-      `prochame_transcribe_${Date.now()}_${Math.random().toString(36).substr(2, 9)}.wav`
+    console.log(`[TranscriptionService] ${provider} <- ${sourceChannel} chunk, RMS ${rms.toFixed(0)}`);
+
+    // Transcription is deliberate background work the user switched on, so it rides at
+    // 'user' priority; Phase 4's auto-answers are the ones that must yield.
+    return RateLimiter.schedule(
+      provider,
+      {
+        priority: 'user',
+        onRetry: ({ attempt, status }) => {
+          this.status(`Transcription retry ${attempt} of 3 (${status || 'network error'}).`);
+        }
+      },
+      () => adapter.transcribe({
+        apiKey: eff.stt.apiKey,
+        baseUrl: eff.stt.baseUrl,
+        model: eff.stt.model,
+        language: eff.stt.language,
+        wav
+      })
     );
-    fs.writeFileSync(tempFile, wavData);
-
-    try {
-      if (provider === 'openai') {
-        const openai = new OpenAI({ apiKey });
-        const resp = await openai.audio.transcriptions.create({
-          file: fs.createReadStream(tempFile),
-          model: 'whisper-1',
-          language: 'en'
-        });
-        return resp.text || '';
-      } else if (provider === 'gemini') {
-        let uploadResult;
-        try {
-          const ai = new GoogleGenAI({ 
-            apiKey,
-            httpOptions: {
-              apiVersion: 'v1beta'
-            }
-          });
-          uploadResult = await ai.files.upload({
-            file: tempFile,
-            mimeType: 'audio/wav'
-          });
-          const resp = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: [
-              uploadResult,
-              { text: 'Transcribe this audio. Return ONLY the transcribed text, nothing else. If there is no talking, return nothing.' }
-            ]
-          });
-          try {
-            await ai.files.delete({ name: uploadResult.name });
-          } catch (delError) {
-            console.warn('[TranscriptionService] Failed to delete remote Gemini file:', delError);
-          }
-          return resp.text ? resp.text.trim() : '';
-        } catch (geminiError) {
-          const errMsg = geminiError.message || String(geminiError);
-          if (errMsg.includes('404') || errMsg.includes('NOT_FOUND') || errMsg.includes('exception parsing response')) {
-            throw new Error('Gemini model not found -- it may be deprecated, check Settings');
-          }
-          throw geminiError;
-        }
-      } else {
-        throw new Error(`Unsupported transcription provider: ${provider}`);
-      }
-    } catch (e) {
-      console.error('[TranscriptionService] Transcription error:', e);
-      throw e;
-    } finally {
-      try {
-        if (fs.existsSync(tempFile)) {
-          fs.unlinkSync(tempFile);
-        }
-      } catch (err) {
-        console.warn('[TranscriptionService] Failed to clean up temp file:', err);
-      }
-    }
   }
 
   calculateRms(buf) {
@@ -96,6 +95,7 @@ class TranscriptionService {
     return Math.sqrt(sum / samples);
   }
 
+  /** Minimal 44-byte RIFF header + raw samples. Providers all accept this. */
   pcmToWav(pcmBuffer, sampleRate = 16000) {
     const wavHeader = Buffer.alloc(44);
     const numChannels = 1;

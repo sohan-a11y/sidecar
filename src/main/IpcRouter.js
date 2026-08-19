@@ -1,9 +1,14 @@
-const { ipcMain, shell } = require('electron');
+const { ipcMain, shell, app } = require('electron');
 const SettingsManager = require('./SettingsManager');
 const WindowManager = require('./WindowManager');
 const MediaCapture = require('./MediaCapture');
 const TranscriptionService = require('./TranscriptionService');
 const LlmService = require('./LlmService');
+const RateLimiter = require('./RateLimiter');
+const Providers = require('./providers');
+const { isAbort } = require('./providers/util');
+
+const TRANSCRIPTION_INTERVAL_MS = 3500;
 
 class IpcRouter {
   constructor() {
@@ -11,40 +16,46 @@ class IpcRouter {
     this.transcriptionTimer = null;
     this.transcriptionBusy = { user: false, system: false };
     this.isLlmBusy = false;
-    this.sttDisabledErrorShown = false;
+    this.activeRequest = null;
+    this.sttErrorShown = false;
   }
 
   initialize() {
-    // 1. Settings handlers
-    ipcMain.handle('sidecar:settings:get', () => SettingsManager.get());
+    RateLimiter.init(app.getPath('userData'));
+    this.applyRateLimits();
+
+    // Main-process modules report to the user through one channel.
+    LlmService.onStatus = (message) => WindowManager.send('status', { message });
+    TranscriptionService.onStatus = (message) => WindowManager.send('status', { message });
+    RateLimiter.onChange = (snapshot) => WindowManager.send('usage', snapshot);
+
+    // 1. Settings handlers — the renderer only ever sees the redacted view.
+    ipcMain.handle('sidecar:settings:get', () => SettingsManager.publicView());
     ipcMain.handle('sidecar:settings:set', (_event, patch) => {
-      this.sttDisabledErrorShown = false; // Reset warning on key change
-      const newSettings = SettingsManager.set(patch);
-      this.validateGeminiModelsConfig(newSettings);
-      return newSettings;
+      this.sttErrorShown = false;
+      LlmService.resetNotices();
+      SettingsManager.set(patch);
+      this.applyRateLimits();
+      this.validateConfiguredModels();
+      return SettingsManager.publicView();
     });
 
-    // 2. Listening / Capture Toggle
+    // 2. Listening / capture toggle
     ipcMain.handle('sidecar:toggle-listening', () => {
       const state = !MediaCapture.isListening;
       const active = MediaCapture.toggleListening(state);
-      
-      if (active) {
-        this.startTranscriptionLoop();
-      } else {
-        this.stopTranscriptionLoop();
-      }
-      
+      if (active) this.startTranscriptionLoop();
+      else this.stopTranscriptionLoop();
       WindowManager.send('capture:state', { active });
       return active;
     });
 
-    // 3. Receive Audio Chunk
+    // 3. Audio chunks from the renderer (16 kHz mono Int16 PCM)
     ipcMain.on('sidecar:audio-chunk', (_event, { source, arrayBuffer }) => {
       MediaCapture.appendAudioChunk(source, arrayBuffer);
     });
 
-    // 4. Run Mode (trigger LLM task)
+    // 4. Run a mode (trigger an LLM task)
     ipcMain.on('sidecar:run-mode', (_event, payload) => {
       this.executeMode(payload.mode, payload.text);
     });
@@ -56,7 +67,7 @@ class IpcRouter {
 
     // 6. External URL
     ipcMain.on('sidecar:open-url', (_event, url) => {
-      shell.openExternal(url).catch(err => console.error('[IpcRouter] Open URL failed:', err));
+      shell.openExternal(url).catch((err) => console.error('[IpcRouter] Open URL failed:', err.message));
     });
 
     // 7. Renderer logging
@@ -64,57 +75,91 @@ class IpcRouter {
       console.log('[Renderer]', msg);
     });
 
-    // Non-blocking validation on startup
-    const currentSettings = SettingsManager.get();
-    this.validateGeminiModelsConfig(currentSettings);
+    // 8. Model list for the settings dropdowns
+    ipcMain.handle('sidecar:models:list', async (_event, { providerId, refresh } = {}) => {
+      try {
+        const result = await LlmService.listModels(providerId, { refresh });
+        return { ok: true, ...result };
+      } catch (e) {
+        console.error(`[IpcRouter] Model list failed for ${providerId}:`, e.message);
+        return { ok: false, models: [], error: e.message };
+      }
+    });
+
+    // 9. Rate-limit budget snapshot
+    ipcMain.handle('sidecar:usage:get', () => RateLimiter.snapshot());
+
+    this.validateConfiguredModels();
   }
 
-  async validateGeminiModelsConfig(settings) {
-    const apiKey = settings.apiKeys.gemini;
-    if (!apiKey) return;
+  applyRateLimits() {
+    RateLimiter.configure(SettingsManager.get().rateLimits);
+  }
 
-    // Run this asynchronously and safely (non-blocking)
+  /**
+   * Drop configured models that the provider no longer serves.
+   * Generalises the old Gemini-only check to every provider (BUILD-PLAN 0.2).
+   */
+  async validateConfiguredModels() {
+    const settings = SettingsManager.get();
+    const providerId = settings.llm.provider;
+    const apiKey = settings.llm.apiKeys[providerId];
+    if (!apiKey && providerId !== 'custom') return;
+
+    // Non-blocking: a slow or unauthorised models endpoint must not delay startup.
     setTimeout(async () => {
+      let models = [];
       try {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
-        const response = await fetch(url);
-        if (!response.ok) return; // Silent skip if key is unauthorized/invalid
-        
-        const data = await response.json();
-        if (!data.models || !Array.isArray(data.models)) return;
-
-        const availableModels = data.models.map(m => m.name.replace('models/', ''));
-        const geminiPrefs = settings.modelPreferences.gemini;
-        let changed = false;
-
-        // Find fallback: first model in the list that contains "flash"
-        const fallbackModel = availableModels.find(name => name.toLowerCase().includes('flash-lite')) || 
-                              availableModels.find(name => name.toLowerCase().includes('flash')) || 
-                              'gemini-2.5-flash-lite';
-
-        if (!availableModels.includes(geminiPrefs.standard)) {
-          console.log(`[IpcRouter] Standard Gemini model "${geminiPrefs.standard}" not found in available models. Auto-updating.`);
-          geminiPrefs.standard = fallbackModel;
-          changed = true;
-        }
-
-        if (!availableModels.includes(geminiPrefs.advanced)) {
-          const fallbackAdvanced = availableModels.find(name => name.toLowerCase().includes('flash') && !name.toLowerCase().includes('flash-lite')) || 
-                                   fallbackModel;
-          console.log(`[IpcRouter] Advanced Gemini model "${geminiPrefs.advanced}" not found in available models. Auto-updating.`);
-          geminiPrefs.advanced = fallbackAdvanced;
-          changed = true;
-        }
-
-        if (changed) {
-          SettingsManager.set({ modelPreferences: { ...settings.modelPreferences, gemini: geminiPrefs } });
-          // Notify the UI
-          WindowManager.send('status', { message: 'Gemini model updated automatically — old model was retired.' });
-        }
+        const result = await LlmService.listModels(providerId, { refresh: true });
+        models = result.models || [];
       } catch (e) {
-        console.error('[IpcRouter] Failed to validate Gemini models list:', e);
+        console.warn(`[IpcRouter] Could not validate ${providerId} models:`, e.message);
+        return;
+      }
+      if (models.length === 0) return;
+
+      const available = new Set(models.map((m) => m.id));
+      const prefs = { ...settings.llm.models[providerId] };
+      let changed = false;
+
+      for (const slot of ['standard', 'advanced']) {
+        const configured = prefs[slot];
+        if (!configured || available.has(configured)) continue;
+        const replacement = this.pickFallbackModel(providerId, models, slot);
+        if (!replacement || replacement === configured) continue;
+        console.log(`[IpcRouter] ${providerId} model "${configured}" is gone — using "${replacement}".`);
+        prefs[slot] = replacement;
+        changed = true;
+      }
+
+      if (prefs.vision && !available.has(prefs.vision)) {
+        prefs.vision = '';
+        changed = true;
+      }
+
+      if (changed) {
+        SettingsManager.set({ llm: { models: { [providerId]: prefs } } });
+        const label = Providers.get(providerId).name;
+        WindowManager.send('status', {
+          message: `${label} model updated automatically — the configured model was retired.`
+        });
+        WindowManager.send('settings:changed', SettingsManager.publicView());
       }
     }, 1000);
+  }
+
+  pickFallbackModel(providerId, models, slot) {
+    const ids = models.map((m) => m.id);
+    if (providerId === 'gemini') {
+      const lite = ids.find((id) => id.toLowerCase().includes('flash-lite'));
+      const flash = ids.find((id) => id.toLowerCase().includes('flash') && !id.toLowerCase().includes('flash-lite'));
+      if (slot === 'advanced') return flash || lite || ids[0];
+      return lite || flash || ids[0];
+    }
+    // Free tiers first for routers — an unavailable model must not silently cost money.
+    const free = models.filter((m) => m.free).map((m) => m.id);
+    if (free.length > 0) return free[0];
+    return ids[0];
   }
 
   startTranscriptionLoop() {
@@ -122,7 +167,7 @@ class IpcRouter {
     this.transcriptionTimer = setInterval(() => {
       this.processTranscription('user');
       this.processTranscription('system');
-    }, 3500);
+    }, TRANSCRIPTION_INTERVAL_MS);
   }
 
   stopTranscriptionLoop() {
@@ -139,30 +184,7 @@ class IpcRouter {
 
     this.transcriptionBusy[source] = true;
     try {
-      const settings = SettingsManager.get();
-      const apiKey = settings.apiKeys[settings.currentProvider];
-      
-      if (!apiKey) {
-        if (!this.sttDisabledErrorShown) {
-          this.sttDisabledErrorShown = true;
-          WindowManager.send('status', { message: 'Missing API key. Listening features require a valid key in Settings.' });
-        }
-        return;
-      }
-
-      // Default to OpenAI Whisper for speech-to-text, or Gemini if selected provider is Gemini
-      const sttProvider = settings.currentProvider === 'gemini' ? 'gemini' : 'openai';
-      const sttApiKey = settings.apiKeys[sttProvider];
-
-      if (!sttApiKey) {
-        if (!this.sttDisabledErrorShown) {
-          this.sttDisabledErrorShown = true;
-          WindowManager.send('status', { message: `Audio transcription requires a key for ${sttProvider === 'gemini' ? 'Gemini' : 'OpenAI'}.` });
-        }
-        return;
-      }
-
-      const text = await TranscriptionService.transcribe(pcm, sttProvider, sttApiKey, source);
+      const text = await TranscriptionService.transcribe(pcm, source);
       if (text && text.trim()) {
         const turn = {
           sender: source === 'user' ? 'user' : 'system',
@@ -173,75 +195,73 @@ class IpcRouter {
         WindowManager.send('transcript', turn);
       }
     } catch (e) {
-      console.error(`[IpcRouter] STT ${source} error:`, e.message);
+      // Configuration problems are worth telling the user about, once.
+      if (e.code === 'STT_NOT_READY' || e.code === 'RATE_LIMIT_DAILY') {
+        if (!this.sttErrorShown) {
+          this.sttErrorShown = true;
+          WindowManager.send('status', { message: e.message });
+        }
+      } else {
+        console.error(`[IpcRouter] STT ${source} error:`, e.message);
+      }
     } finally {
       this.transcriptionBusy[source] = false;
     }
   }
 
-  async executeMode(mode, userText) {
+  async executeMode(mode, userText, { priority = 'user' } = {}) {
     if (this.isLlmBusy) return;
     const modeConfig = LlmService.modes[mode];
     if (!modeConfig) return;
 
     this.isLlmBusy = true;
-    
-    // Notify frontend streaming starts
-    const userBubble = modeConfig.requiresScreen || mode === 'ask' 
-      ? (userText || (mode === 'code' ? 'Analyze screen contents' : 'Assist')) 
+    const controller = new AbortController();
+    this.activeRequest = controller;
+
+    const userBubble = modeConfig.requiresScreen || mode === 'ask'
+      ? (userText || (mode === 'code' ? 'Analyze screen contents' : 'Assist'))
       : null;
-      
+
     WindowManager.send('llm:start', { userBubble, small: mode === 'questions' || mode === 'summarize' });
 
     try {
-      const settings = SettingsManager.get();
-      const provider = settings.currentProvider;
-      const apiKey = settings.apiKeys[provider];
-
-      if (!apiKey) {
-        WindowManager.send('llm:error', { message: `Please provide your ${provider.toUpperCase()} API key in Settings.` });
-        return;
-      }
-
-      const model = settings.smartModeEnabled 
-        ? settings.modelPreferences[provider].advanced 
-        : settings.modelPreferences[provider].standard;
-
-      let imageDataUrl = null;
+      const images = [];
       if (modeConfig.requiresScreen) {
         try {
-          imageDataUrl = await MediaCapture.takeScreenshot();
+          images.push(await MediaCapture.takeScreenshot());
         } catch (e) {
           WindowManager.send('status', { message: 'Screen Recording permission is required for screenshot features.' });
         }
       }
 
-      await LlmService.streamCompletion({
-        provider,
-        apiKey,
-        model,
-        mode,
-        transcript: this.transcript,
-        userText,
-        imageDataUrl
-      }, (token) => {
-        WindowManager.send('llm:token', { text: token });
-      });
+      await LlmService.stream(
+        {
+          mode,
+          messages: LlmService.buildMessages(mode, { transcript: this.transcript, userText }),
+          images,
+          signal: controller.signal,
+          priority
+        },
+        (token) => WindowManager.send('llm:token', { text: token })
+      );
 
       WindowManager.send('llm:done', {});
     } catch (err) {
-      WindowManager.send('llm:error', { message: `LLM Error: ${err.message}` });
+      if (isAbort(err)) {
+        WindowManager.send('llm:done', {});
+      } else {
+        WindowManager.send('llm:error', { message: `LLM Error: ${err.message}` });
+      }
     } finally {
       this.isLlmBusy = false;
+      this.activeRequest = null;
     }
   }
 
   ensureListeningAndAssist() {
     if (!MediaCapture.isListening) {
       const active = MediaCapture.toggleListening(true);
-      if (active) {
-        this.startTranscriptionLoop();
-      }
+      if (active) this.startTranscriptionLoop();
       WindowManager.send('capture:state', { active });
     }
     this.executeMode('assist', '');
