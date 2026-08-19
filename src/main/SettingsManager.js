@@ -26,8 +26,14 @@ class SettingsManager {
         // Per-provider so switching provider doesn't discard the other's config.
         models: {
           openai: { standard: 'gpt-4o-mini', advanced: 'gpt-4o', vision: '' },
-          anthropic: { standard: 'claude-3-5-haiku-latest', advanced: 'claude-3-5-sonnet-latest', vision: '' },
-          gemini: { standard: 'gemini-2.5-flash-lite', advanced: 'gemini-2.5-flash', vision: '' },
+          anthropic: {
+            standard: 'claude-3-5-haiku-latest',
+            advanced: 'claude-3-5-sonnet-latest',
+            vision: ''
+          },
+          // '-latest' aliases, not pinned versions: Google retires pinned models (even ones
+          // still returned by the list endpoint) faster than this file gets updated.
+          gemini: { standard: 'gemini-flash-lite-latest', advanced: 'gemini-flash-latest', vision: '' },
           tokenrouter: {
             standard: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free',
             advanced: 'qwen/qwen3.8-max-free',
@@ -48,11 +54,15 @@ class SettingsManager {
         // Batch mode only: which provider does the upload.
         provider: 'openai',
         baseUrl: '',
-        models: { openai: 'whisper-1', gemini: 'gemini-2.5-flash', custom: 'whisper-1' },
+        models: { openai: 'whisper-1', gemini: 'gemini-flash-latest', custom: 'whisper-1' },
         apiKeys: { openai: '', gemini: '', custom: '' },
         // Streaming engines carry their own keys and models.
         engineKeys: { deepgram: '', assemblyai: '', openaiRealtime: '' },
-        engineModels: { deepgram: 'nova-3', assemblyai: 'universal-streaming', openaiRealtime: 'gpt-4o-mini-transcribe' }
+        engineModels: {
+          deepgram: 'nova-3',
+          assemblyai: 'universal-streaming',
+          openaiRealtime: 'gpt-4o-mini-transcribe'
+        }
       },
 
       // Free tiers cap requests/minute and requests/day; defaults are deliberately conservative.
@@ -268,7 +278,11 @@ class SettingsManager {
     const cleaned = this.clone(patch || {});
     const keyUpdates = [];
 
-    for (const [section, field] of [['llm', 'apiKeys'], ['stt', 'apiKeys'], ['stt', 'engineKeys']]) {
+    for (const [section, field] of [
+      ['llm', 'apiKeys'],
+      ['stt', 'apiKeys'],
+      ['stt', 'engineKeys']
+    ]) {
       const keys = cleaned[section] && cleaned[section][field];
       if (!keys) continue;
       for (const [providerId, value] of Object.entries(keys)) {
@@ -301,7 +315,7 @@ class SettingsManager {
     return {
       llm: {
         provider: llmProvider,
-        model: s.smartModeEnabled ? (llmModels.advanced || llmModels.standard) : llmModels.standard,
+        model: s.smartModeEnabled ? llmModels.advanced || llmModels.standard : llmModels.standard,
         standardModel: llmModels.standard,
         advancedModel: llmModels.advanced,
         visionModel: llmModels.vision || '',
@@ -361,7 +375,7 @@ class SettingsManager {
   }
 
   isObject(item) {
-    return (item && typeof item === 'object' && !Array.isArray(item));
+    return item && typeof item === 'object' && !Array.isArray(item);
   }
 }
 

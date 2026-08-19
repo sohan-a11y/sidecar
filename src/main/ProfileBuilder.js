@@ -74,7 +74,9 @@ class ProfileBuilder {
     const truncated = source.length > MAX_INPUT_CHARS;
     const input = truncated ? source.slice(0, MAX_INPUT_CHARS) : source;
     if (truncated) {
-      console.warn(`[ProfileBuilder] Source text truncated to ${MAX_INPUT_CHARS} characters for distillation.`);
+      console.warn(
+        `[ProfileBuilder] Source text truncated to ${MAX_INPUT_CHARS} characters for distillation.`
+      );
     }
 
     if (onProgress) onProgress('Reading documents');
@@ -95,7 +97,9 @@ class ProfileBuilder {
     if (onProgress) onProgress('Parsing profile');
     const parsed = this.parseJson(output);
     if (!parsed) {
-      throw new Error('The model did not return usable JSON. Try a stronger model and run it again.');
+      throw new Error(
+        'The model did not return usable JSON. Try a stronger model and run it again.'
+      );
     }
 
     const profile = ContextStore.normaliseProfile(parsed);

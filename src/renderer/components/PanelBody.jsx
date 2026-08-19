@@ -12,7 +12,14 @@ const MODES = [
   { id: 'questions', label: 'Questions', description: 'Propose follow-up questions' }
 ];
 
-export default function PanelBody({ messages, activeMode, onSelectMode, isListening, turns, onCopy }) {
+export default function PanelBody({
+  messages,
+  activeMode,
+  onSelectMode,
+  isListening,
+  turns,
+  onCopy
+}) {
   const [tab, setTab] = useState('answers');
   const [wide, setWide] = useState(() => window.innerWidth >= SPLIT_MIN_WIDTH);
 

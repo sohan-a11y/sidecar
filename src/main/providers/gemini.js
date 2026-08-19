@@ -2,7 +2,10 @@ const { GoogleGenAI } = require('@google/genai');
 const { parseDataUrl, withTempWav, abortError, systemToText } = require('./util');
 
 const MODELS_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
-const SEED_MODELS = ['gemini-2.5-flash-lite', 'gemini-2.5-flash', 'gemini-2.5-pro'];
+// '-latest' aliases: Gemini's /v1beta/models list can still return a pinned model id
+// after Google has retired it for new callers -- generateContent then 404s even though
+// the model was 'available'. Aliases redirect server-side and don't go stale.
+const SEED_MODELS = ['gemini-flash-lite-latest', 'gemini-flash-latest', 'gemini-2.5-pro'];
 
 /** Map a Gemini 404 / parse failure onto the message the UI already knows how to show. */
 function normaliseGeminiError(err) {
@@ -22,10 +25,10 @@ const adapter = {
   name: 'Google Gemini',
   capabilities: { vision: true, streaming: true, transcription: true },
   defaults: {
-    standard: 'gemini-2.5-flash-lite',
-    advanced: 'gemini-2.5-flash',
-    vision: 'gemini-2.5-flash-lite',
-    transcription: 'gemini-2.5-flash'
+    standard: 'gemini-flash-lite-latest',
+    advanced: 'gemini-flash-latest',
+    vision: 'gemini-flash-lite-latest',
+    transcription: 'gemini-flash-latest'
   },
 
   async listModels(apiKey) {

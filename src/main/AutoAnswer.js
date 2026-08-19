@@ -11,9 +11,9 @@ const RateLimiter = require('./RateLimiter');
  */
 class AutoAnswer {
   constructor() {
-    this.onTrigger = null;      // ({ trigger, confidence, reasons, speculative }) => void
-    this.onCancel = null;       // () => void
-    this.onNotice = null;       // (message) => void
+    this.onTrigger = null; // ({ trigger, confidence, reasons, speculative }) => void
+    this.onCancel = null; // () => void
+    this.onNotice = null; // (message) => void
     this.lastFiredAt = 0;
     this.firedTimestamps = [];
     this.debounceTimer = null;
@@ -122,10 +122,13 @@ class AutoAnswer {
     if (this.debounceTimer) clearTimeout(this.debounceTimer);
 
     this.pending = { ...verdict, speculative };
-    this.debounceTimer = setTimeout(() => {
-      this.debounceTimer = null;
-      this.fire(providerId);
-    }, speculative ? debounceMs / 2 : debounceMs);
+    this.debounceTimer = setTimeout(
+      () => {
+        this.debounceTimer = null;
+        this.fire(providerId);
+      },
+      speculative ? debounceMs / 2 : debounceMs
+    );
     if (this.debounceTimer.unref) this.debounceTimer.unref();
     return this.pending;
   }

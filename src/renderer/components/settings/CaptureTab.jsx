@@ -1,13 +1,24 @@
 import React, { useState, useEffect } from 'react';
 
-const DENSITIES = [['comfortable', 'Comfortable'], ['compact', 'Compact']];
+const DENSITIES = [
+  ['comfortable', 'Comfortable'],
+  ['compact', 'Compact']
+];
 const PLACEMENTS = [
-  ['top-center', 'Top centre'], ['top-left', 'Top left'],
-  ['top-right', 'Top right'], ['bottom-center', 'Bottom centre']
+  ['top-center', 'Top centre'],
+  ['top-left', 'Top left'],
+  ['top-right', 'Top right'],
+  ['bottom-center', 'Bottom centre']
 ];
 
 /** Capture target, region, and how the overlay presents itself. */
-export default function CaptureTab({ sidecar, capture, overlay, onCaptureChange, onOverlayChange }) {
+export default function CaptureTab({
+  sidecar,
+  capture,
+  overlay,
+  onCaptureChange,
+  onOverlayChange
+}) {
   const [sources, setSources] = useState([]);
   const [displays, setDisplays] = useState([]);
   const [shortcuts, setShortcuts] = useState({ actions: [], bindings: {}, conflicts: [] });
@@ -27,7 +38,9 @@ export default function CaptureTab({ sidecar, capture, overlay, onCaptureChange,
     setLoading(false);
   };
 
-  useEffect(() => { refresh(); }, []);
+  useEffect(() => {
+    refresh();
+  }, []);
 
   const pickRegion = async () => {
     onCaptureChange(await sidecar.capture.pickRegion());
@@ -44,7 +57,13 @@ export default function CaptureTab({ sidecar, capture, overlay, onCaptureChange,
     const key = e.key;
     if (['Control', 'Meta', 'Alt', 'Shift'].includes(key)) return;
 
-    const named = { ' ': 'Space', Enter: 'Return', Escape: 'Esc', ArrowUp: 'Up', ArrowDown: 'Down' };
+    const named = {
+      ' ': 'Space',
+      Enter: 'Return',
+      Escape: 'Esc',
+      ArrowUp: 'Up',
+      ArrowDown: 'Down'
+    };
     parts.push(named[key] || (key.length === 1 ? key.toUpperCase() : key));
 
     const accelerator = parts.join('+');
@@ -78,9 +97,11 @@ export default function CaptureTab({ sidecar, capture, overlay, onCaptureChange,
               onClick={() => onCaptureChange({ ...capture, sourceId: s.id })}
               title={s.name}
             >
-              {s.thumbnail
-                ? <img src={s.thumbnail} alt="" className="source-thumb" />
-                : <div className="source-thumb source-thumb-empty" />}
+              {s.thumbnail ? (
+                <img src={s.thumbnail} alt="" className="source-thumb" />
+              ) : (
+                <div className="source-thumb source-thumb-empty" />
+              )}
               <span className="source-name">{s.name}</span>
             </button>
           ))}
@@ -95,7 +116,9 @@ export default function CaptureTab({ sidecar, capture, overlay, onCaptureChange,
             : 'Capturing the whole source. Pick a region to send only the part that matters.'}
         </p>
         <div className="context-actions">
-          <button type="button" className="link-btn" onClick={pickRegion}>Select region…</button>
+          <button type="button" className="link-btn" onClick={pickRegion}>
+            Select region…
+          </button>
           {capture.region && (
             <button
               type="button"
@@ -116,9 +139,12 @@ export default function CaptureTab({ sidecar, capture, overlay, onCaptureChange,
               min="480"
               step="160"
               value={capture.maxWidth}
-              onChange={(e) => onCaptureChange({
-                ...capture, maxWidth: Math.max(480, Number(e.target.value) || 1280)
-              })}
+              onChange={(e) =>
+                onCaptureChange({
+                  ...capture,
+                  maxWidth: Math.max(480, Number(e.target.value) || 1280)
+                })
+              }
             />
           </label>
         </div>
@@ -180,7 +206,10 @@ export default function CaptureTab({ sidecar, capture, overlay, onCaptureChange,
         <div className="select-row">
           {displays.map((d) => (
             <label className="select-cell" key={d.id}>
-              <span>{d.label}{d.primary ? ' · primary' : ''}</span>
+              <span>
+                {d.label}
+                {d.primary ? ' · primary' : ''}
+              </span>
               <select
                 className="setting-select"
                 defaultValue=""
@@ -189,8 +218,14 @@ export default function CaptureTab({ sidecar, capture, overlay, onCaptureChange,
                   e.target.value = '';
                 }}
               >
-                <option value="" disabled>move to…</option>
-                {PLACEMENTS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                <option value="" disabled>
+                  move to…
+                </option>
+                {PLACEMENTS.map(([v, l]) => (
+                  <option key={v} value={v}>
+                    {l}
+                  </option>
+                ))}
               </select>
             </label>
           ))}
@@ -204,7 +239,9 @@ export default function CaptureTab({ sidecar, capture, overlay, onCaptureChange,
           const conflict = conflictFor(action.id);
           return (
             <div className="limit-row" key={action.id}>
-              <span className="limit-name" title={action.description}>{action.label}</span>
+              <span className="limit-name" title={action.description}>
+                {action.label}
+              </span>
               <button
                 type="button"
                 className={`shortcut-chip ${capturing === action.id ? 'recording' : ''} ${conflict ? 'conflict' : ''}`}
@@ -212,7 +249,7 @@ export default function CaptureTab({ sidecar, capture, overlay, onCaptureChange,
                 onKeyDown={capturing === action.id ? recordKey(action.id) : undefined}
                 title={conflict ? conflict.reason : 'Click, then press a combination'}
               >
-                {capturing === action.id ? 'press keys…' : (shortcuts.bindings[action.id] || 'unset')}
+                {capturing === action.id ? 'press keys…' : shortcuts.bindings[action.id] || 'unset'}
               </button>
             </div>
           );

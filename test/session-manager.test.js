@@ -45,7 +45,9 @@ describe('SessionManager', () => {
   afterEach(() => {
     try {
       fs.rmSync(tmpDir, { recursive: true, force: true });
-    } catch (e) { /* best effort */ }
+    } catch (e) {
+      /* best effort */
+    }
   });
 
   it('snapshots the interview context into the session', () => {
@@ -72,9 +74,9 @@ describe('SessionManager', () => {
     say('user', 'still speaking', { interim: true });
     SessionManager.persist(true);
 
-    const onDisk = JSON.parse(fs.readFileSync(
-      path.join(tmpDir, 'sessions', `${SessionManager.current().id}.json`), 'utf8'
-    ));
+    const onDisk = JSON.parse(
+      fs.readFileSync(path.join(tmpDir, 'sessions', `${SessionManager.current().id}.json`), 'utf8')
+    );
     expect(onDisk.transcript).toHaveLength(1);
     expect(onDisk.transcript[0].text).toBe('final line');
   });
@@ -101,7 +103,9 @@ describe('SessionManager', () => {
   });
 
   it('folds older turns into a running summary exactly once per interval', async () => {
-    SettingsManager.set({ transcript: { windowTurns: 5, summariseEvery: 5, maxPromptTokens: 100000 } });
+    SettingsManager.set({
+      transcript: { windowTurns: 5, summariseEvery: 5, maxPromptTokens: 100000 }
+    });
     let calls = 0;
     SessionManager.onSummaryNeeded = async (older) => {
       calls += 1;
@@ -167,7 +171,12 @@ describe('SessionManager', () => {
     SessionManager.start('Export me');
     say('system', 'What is your greatest weakness?');
     say('user', 'Answering this question.');
-    SessionManager.addAnswer({ mode: 'reply', provider: 'openai', model: 'gpt-4o', text: 'Say something true.' });
+    SessionManager.addAnswer({
+      mode: 'reply',
+      provider: 'openai',
+      model: 'gpt-4o',
+      text: 'Say something true.'
+    });
     const id = SessionManager.current().id;
 
     const md = SessionManager.export(id, 'md');

@@ -30,7 +30,7 @@ class TranscriptionService {
   config() {
     const settings = SettingsManager.get();
     const eff = SettingsManager.effective();
-    const engineId = this.degraded ? 'batch' : (settings.stt.engine || 'batch');
+    const engineId = this.degraded ? 'batch' : settings.stt.engine || 'batch';
     return {
       engineId,
       engine: SttEngines.has(engineId) ? SttEngines.get(engineId) : SttEngines.get('batch'),
@@ -47,7 +47,10 @@ class TranscriptionService {
 
     if (engine.streaming) {
       if (!engineKeys[engineId]) {
-        return { ready: false, reason: `${engine.name} needs an API key. Add one in Settings → Speech.` };
+        return {
+          ready: false,
+          reason: `${engine.name} needs an API key. Add one in Settings → Speech.`
+        };
       }
       return { ready: true, streaming: true };
     }
@@ -57,10 +60,16 @@ class TranscriptionService {
     }
     const adapter = Providers.get(provider.provider);
     if (!adapter.capabilities.transcription || typeof adapter.transcribe !== 'function') {
-      return { ready: false, reason: `${adapter.name} cannot transcribe audio. Choose another provider in Settings.` };
+      return {
+        ready: false,
+        reason: `${adapter.name} cannot transcribe audio. Choose another provider in Settings.`
+      };
     }
     if (!provider.apiKey && provider.provider !== 'custom') {
-      return { ready: false, reason: `Transcription needs a ${adapter.name} API key. Add one in Settings.` };
+      return {
+        ready: false,
+        reason: `Transcription needs a ${adapter.name} API key. Add one in Settings.`
+      };
     }
     if (adapter.requiresBaseUrl && !provider.baseUrl) {
       return { ready: false, reason: `${adapter.name} transcription needs a base URL.` };
@@ -109,7 +118,9 @@ class TranscriptionService {
           if (this.degraded) return;
           this.degraded = true;
           this.closeAll();
-          this.status(`${engine.name} kept dropping the connection — falling back to batch transcription.`);
+          this.status(
+            `${engine.name} kept dropping the connection — falling back to batch transcription.`
+          );
         }
       }
     );

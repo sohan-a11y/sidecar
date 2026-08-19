@@ -11,15 +11,78 @@ import React, { useState, useMemo } from 'react';
 
 const KEYWORDS = [
   // JS/TS
-  'const', 'let', 'var', 'function', 'return', 'if', 'else', 'for', 'while', 'class', 'new',
-  'await', 'async', 'import', 'from', 'export', 'default', 'try', 'catch', 'finally', 'throw',
-  'typeof', 'instanceof', 'interface', 'type', 'extends', 'implements', 'public', 'private',
+  'const',
+  'let',
+  'var',
+  'function',
+  'return',
+  'if',
+  'else',
+  'for',
+  'while',
+  'class',
+  'new',
+  'await',
+  'async',
+  'import',
+  'from',
+  'export',
+  'default',
+  'try',
+  'catch',
+  'finally',
+  'throw',
+  'typeof',
+  'instanceof',
+  'interface',
+  'type',
+  'extends',
+  'implements',
+  'public',
+  'private',
   // Python
-  'def', 'elif', 'lambda', 'None', 'True', 'False', 'self', 'yield', 'with', 'as', 'pass',
-  'raise', 'except', 'in', 'not', 'and', 'or', 'is', 'global', 'nonlocal',
+  'def',
+  'elif',
+  'lambda',
+  'None',
+  'True',
+  'False',
+  'self',
+  'yield',
+  'with',
+  'as',
+  'pass',
+  'raise',
+  'except',
+  'in',
+  'not',
+  'and',
+  'or',
+  'is',
+  'global',
+  'nonlocal',
   // Go / Rust / Java / C-ish
-  'func', 'package', 'struct', 'impl', 'fn', 'mut', 'pub', 'match', 'switch', 'case', 'break',
-  'continue', 'static', 'void', 'int', 'string', 'bool', 'nil', 'null', 'true', 'false'
+  'func',
+  'package',
+  'struct',
+  'impl',
+  'fn',
+  'mut',
+  'pub',
+  'match',
+  'switch',
+  'case',
+  'break',
+  'continue',
+  'static',
+  'void',
+  'int',
+  'string',
+  'bool',
+  'nil',
+  'null',
+  'true',
+  'false'
 ];
 
 const KEYWORD_RE = new RegExp(`\\b(${KEYWORDS.join('|')})\\b`, 'g');
@@ -54,7 +117,9 @@ function highlight(code) {
   spans.forEach((span, i) => {
     if (span.start > cursor) parts.push(code.slice(cursor, span.start));
     parts.push(
-      <span key={`t-${i}`} className={`tok-${span.kind}`}>{code.slice(span.start, span.end)}</span>
+      <span key={`t-${i}`} className={`tok-${span.kind}`}>
+        {code.slice(span.start, span.end)}
+      </span>
     );
     cursor = span.end;
   });
@@ -77,7 +142,9 @@ export default function CodeBlock({ code }) {
       <button type="button" className="code-copy-btn" onClick={copy}>
         {copied ? 'copied' : 'copy'}
       </button>
-      <pre className="bubble-code-block"><code>{tokens}</code></pre>
+      <pre className="bubble-code-block">
+        <code>{tokens}</code>
+      </pre>
     </div>
   );
 }

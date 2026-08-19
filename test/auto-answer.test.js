@@ -42,24 +42,34 @@ function boot() {
 describe('QuestionDetector', () => {
   beforeEach(() => boot());
   afterEach(() => {
-    try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch (e) { /* ignore */ }
+    try {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    } catch (e) {
+      /* ignore */
+    }
   });
 
   const confidence = (text, ctx) => QuestionDetector.detect(text, ctx).confidence;
 
   it('scores a direct question highly', () => {
-    expect(confidence('What is your greatest weakness?', { silenceMs: 1500, isFinal: true }))
-      .toBeGreaterThan(0.7);
+    expect(
+      confidence('What is your greatest weakness?', { silenceMs: 1500, isFinal: true })
+    ).toBeGreaterThan(0.7);
   });
 
   it('catches an imperative prompt with no question mark', () => {
-    expect(confidence('Tell me about a time you disagreed with a colleague', { silenceMs: 1500, isFinal: true }))
-      .toBeGreaterThan(0.7);
+    expect(
+      confidence('Tell me about a time you disagreed with a colleague', {
+        silenceMs: 1500,
+        isFinal: true
+      })
+    ).toBeGreaterThan(0.7);
   });
 
   it('catches auxiliary-verb inversion', () => {
-    expect(confidence('Can you walk me through your last project', { silenceMs: 1400, isFinal: true }))
-      .toBeGreaterThan(0.7);
+    expect(
+      confidence('Can you walk me through your last project', { silenceMs: 1400, isFinal: true })
+    ).toBeGreaterThan(0.7);
   });
 
   it('ignores conversational filler that ends in a question mark', () => {
@@ -68,13 +78,20 @@ describe('QuestionDetector', () => {
   });
 
   it('ignores a statement', () => {
-    expect(confidence('We build the billing system in Go.', { silenceMs: 2000, isFinal: true }))
-      .toBeLessThan(0.5);
+    expect(
+      confidence('We build the billing system in Go.', { silenceMs: 2000, isFinal: true })
+    ).toBeLessThan(0.5);
   });
 
   it('holds back when the speaker trails off mid-thought', () => {
-    const finished = confidence('So what would you do in that situation', { silenceMs: 1500, isFinal: true });
-    const trailing = confidence('So what would you do in that situation and', { silenceMs: 200, isFinal: true });
+    const finished = confidence('So what would you do in that situation', {
+      silenceMs: 1500,
+      isFinal: true
+    });
+    const trailing = confidence('So what would you do in that situation and', {
+      silenceMs: 200,
+      isFinal: true
+    });
     expect(trailing).toBeLessThan(finished);
   });
 
@@ -85,7 +102,12 @@ describe('QuestionDetector', () => {
   });
 
   it('accepts a pluggable strategy without callers changing', () => {
-    QuestionDetector.setStrategy(() => ({ isQuestion: true, confidence: 0.99, reasons: ['stub'], trigger: 'x' }));
+    QuestionDetector.setStrategy(() => ({
+      isQuestion: true,
+      confidence: 0.99,
+      reasons: ['stub'],
+      trigger: 'x'
+    }));
     expect(confidence('anything at all')).toBe(0.99);
     QuestionDetector.setStrategy(null);
   });
@@ -106,7 +128,11 @@ describe('AutoAnswer interlock', () => {
   });
 
   afterEach(() => {
-    try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch (e) { /* ignore */ }
+    try {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    } catch (e) {
+      /* ignore */
+    }
   });
 
   const ask = (text, extra = {}) =>
@@ -145,7 +171,11 @@ describe('AutoAnswer interlock', () => {
     AutoAnswer.lastFiredAt = 0;
     SettingsManager.set({ autoAnswer: { cooldownMs: 0, maxPerMinute: 2 } });
 
-    for (const q of ['What is your weakness?', 'Why did you leave?', 'How do you handle conflict?']) {
+    for (const q of [
+      'What is your weakness?',
+      'Why did you leave?',
+      'How do you handle conflict?'
+    ]) {
       ask(q);
       await settle();
     }
@@ -169,19 +199,29 @@ describe('AutoAnswer interlock', () => {
   });
 
   it('ignores interim turns unless speculative generation is on', async () => {
-    AutoAnswer.consider({ text: 'Tell me about a time you failed', isFinal: false, silenceMs: 100 }, 'openai');
+    AutoAnswer.consider(
+      { text: 'Tell me about a time you failed', isFinal: false, silenceMs: 100 },
+      'openai'
+    );
     await settle();
     expect(fired).toHaveLength(0);
 
     SettingsManager.set({ autoAnswer: { speculative: true, threshold: 0.5 } });
-    AutoAnswer.consider({ text: 'Tell me about a time you failed', isFinal: false, silenceMs: 1500 }, 'openai');
+    AutoAnswer.consider(
+      { text: 'Tell me about a time you failed', isFinal: false, silenceMs: 1500 },
+      'openai'
+    );
     await settle();
     expect(fired).toHaveLength(1);
     expect(fired[0].speculative).toBe(true);
   });
 
   it('treats appended words as the same question, not a new one', () => {
-    expect(AutoAnswer.divergedFrom('tell me about a time', 'tell me about a time you failed')).toBe(false);
-    expect(AutoAnswer.divergedFrom('tell me about a time', 'what is your salary expectation')).toBe(true);
+    expect(AutoAnswer.divergedFrom('tell me about a time', 'tell me about a time you failed')).toBe(
+      false
+    );
+    expect(AutoAnswer.divergedFrom('tell me about a time', 'what is your salary expectation')).toBe(
+      true
+    );
   });
 });

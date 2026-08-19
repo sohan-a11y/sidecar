@@ -15,13 +15,32 @@ const KEY_PLACEHOLDERS = {
 };
 
 const LANGUAGES = [
-  ['auto', 'Auto-detect'], ['en', 'English'], ['hi', 'Hindi'], ['te', 'Telugu'],
-  ['ta', 'Tamil'], ['bn', 'Bengali'], ['mr', 'Marathi'], ['gu', 'Gujarati'],
-  ['kn', 'Kannada'], ['ml', 'Malayalam'], ['pa', 'Punjabi'], ['ur', 'Urdu'],
-  ['es', 'Spanish'], ['fr', 'French'], ['de', 'German'], ['pt', 'Portuguese'],
-  ['it', 'Italian'], ['nl', 'Dutch'], ['ru', 'Russian'], ['ar', 'Arabic'],
-  ['zh', 'Chinese'], ['ja', 'Japanese'], ['ko', 'Korean'], ['tr', 'Turkish'],
-  ['id', 'Indonesian'], ['vi', 'Vietnamese']
+  ['auto', 'Auto-detect'],
+  ['en', 'English'],
+  ['hi', 'Hindi'],
+  ['te', 'Telugu'],
+  ['ta', 'Tamil'],
+  ['bn', 'Bengali'],
+  ['mr', 'Marathi'],
+  ['gu', 'Gujarati'],
+  ['kn', 'Kannada'],
+  ['ml', 'Malayalam'],
+  ['pa', 'Punjabi'],
+  ['ur', 'Urdu'],
+  ['es', 'Spanish'],
+  ['fr', 'French'],
+  ['de', 'German'],
+  ['pt', 'Portuguese'],
+  ['it', 'Italian'],
+  ['nl', 'Dutch'],
+  ['ru', 'Russian'],
+  ['ar', 'Arabic'],
+  ['zh', 'Chinese'],
+  ['ja', 'Japanese'],
+  ['ko', 'Korean'],
+  ['tr', 'Turkish'],
+  ['id', 'Indonesian'],
+  ['vi', 'Vietnamese']
 ];
 
 const TABS = [
@@ -80,18 +99,34 @@ export default function SettingsModal({ isOpen, onClose, sidecar }) {
     }
   };
 
-  const fetchModels = useCallback(async (providerId, refresh = false) => {
-    setModelLists((prev) => ({ ...prev, [providerId]: { ...(prev[providerId] || {}), loading: true } }));
-    try {
-      const res = await sidecar.listModels(providerId, { refresh });
+  const fetchModels = useCallback(
+    async (providerId, refresh = false) => {
+      // Keep `models` populated through the loading transition — a bare
+      // { loading: true } here previously left activeList.models undefined and crashed
+      // visionOf()'s direct .find() call on the very first render after Settings opened.
       setModelLists((prev) => ({
         ...prev,
-        [providerId]: { models: res.models || [], loading: false, error: res.ok ? '' : res.error || '' }
+        [providerId]: { models: [], error: '', ...(prev[providerId] || {}), loading: true }
       }));
-    } catch (e) {
-      setModelLists((prev) => ({ ...prev, [providerId]: { models: [], loading: false, error: e.message } }));
-    }
-  }, [sidecar]);
+      try {
+        const res = await sidecar.listModels(providerId, { refresh });
+        setModelLists((prev) => ({
+          ...prev,
+          [providerId]: {
+            models: res.models || [],
+            loading: false,
+            error: res.ok ? '' : res.error || ''
+          }
+        }));
+      } catch (e) {
+        setModelLists((prev) => ({
+          ...prev,
+          [providerId]: { models: [], loading: false, error: e.message }
+        }));
+      }
+    },
+    [sidecar]
+  );
 
   const llmProvider = draft?.llm.provider;
   useEffect(() => {
@@ -103,23 +138,35 @@ export default function SettingsModal({ isOpen, onClose, sidecar }) {
   const providers = view.providers || [];
   const providerMeta = providers.find((p) => p.id === draft.llm.provider) || {};
   const sttProviders = providers.filter((p) => p.capabilities.transcription);
-  const activeList = modelLists[draft.llm.provider] || { models: [], loading: false, error: '' };
-  const activeModels = draft.llm.models[draft.llm.provider] || { standard: '', advanced: '', vision: '' };
+  // Defensive on top of the fetchModels fix above: never let a partial cache entry
+  // leave activeList.models undefined for a direct .find() call to crash on.
+  const activeList = {
+    models: [],
+    loading: false,
+    error: '',
+    ...(modelLists[draft.llm.provider] || {})
+  };
+  const activeModels = draft.llm.models[draft.llm.provider] || {
+    standard: '',
+    advanced: '',
+    vision: ''
+  };
 
   const patchLlm = (patch) => setDraft((d) => ({ ...d, llm: { ...d.llm, ...patch } }));
-  const patchModels = (patch) => patchLlm({
-    models: {
-      ...draft.llm.models,
-      [draft.llm.provider]: { ...activeModels, ...patch }
-    }
-  });
+  const patchModels = (patch) =>
+    patchLlm({
+      models: {
+        ...draft.llm.models,
+        [draft.llm.provider]: { ...activeModels, ...patch }
+      }
+    });
   const patchStt = (patch) => setDraft((d) => ({ ...d, stt: { ...d.stt, ...patch } }));
 
   const visionOf = (modelId) => {
     if (!modelId) return null;
     const override = draft.llm.visionOverrides[modelId];
     if (typeof override === 'boolean') return override;
-    const record = activeList.models.find((m) => m.id === modelId);
+    const record = (activeList.models || []).find((m) => m.id === modelId);
     return record ? !!record.vision : null;
   };
 
@@ -142,7 +189,8 @@ export default function SettingsModal({ isOpen, onClose, sidecar }) {
     const out = {};
     for (const id of providerIds) {
       const raw = keyDrafts[`${section}:${id}`];
-      if (raw === null) out[id] = null;          // clear
+      if (raw === null)
+        out[id] = null; // clear
       else if (typeof raw === 'string' && raw.trim()) out[id] = raw.trim();
     }
     return out;
@@ -157,7 +205,10 @@ export default function SettingsModal({ isOpen, onClose, sidecar }) {
           baseUrl: draft.llm.baseUrl.trim(),
           models: draft.llm.models,
           visionOverrides: draft.llm.visionOverrides,
-          apiKeys: collectKeys('llm', providers.map((p) => p.id))
+          apiKeys: collectKeys(
+            'llm',
+            providers.map((p) => p.id)
+          )
         },
         stt: {
           engine: draft.stt.engine,
@@ -166,8 +217,14 @@ export default function SettingsModal({ isOpen, onClose, sidecar }) {
           baseUrl: draft.stt.baseUrl.trim(),
           models: draft.stt.models,
           engineModels: draft.stt.engineModels,
-          apiKeys: collectKeys('stt', sttProviders.map((p) => p.id)),
-          engineKeys: collectKeys('sttEngine', sttEngines.map((e) => e.id))
+          apiKeys: collectKeys(
+            'stt',
+            sttProviders.map((p) => p.id)
+          ),
+          engineKeys: collectKeys(
+            'sttEngine',
+            sttEngines.map((e) => e.id)
+          )
         },
         rateLimits: draft.rateLimits,
         autoAnswer: draft.autoAnswer,
@@ -194,7 +251,9 @@ export default function SettingsModal({ isOpen, onClose, sidecar }) {
       <div className="settings-modal modal-glass animate-pop">
         <div className="modal-header">
           <h2 className="modal-title">Preferences</h2>
-          <button className="modal-close-btn" onClick={onClose}>Done</button>
+          <button className="modal-close-btn" onClick={onClose}>
+            Done
+          </button>
         </div>
 
         <div className="modal-tabs">
@@ -350,152 +409,192 @@ export default function SettingsModal({ isOpen, onClose, sidecar }) {
 
           {tab === 'limits' && (
             <>
-            <div className="setting-group">
-              <label className="setting-label">Auto-answer</label>
-              <p className="setting-hint">
-                Off by default. When armed, detected questions are answered without a hotkey —
-                which spends your quota on its own. Manual presses always win.
-              </p>
-              <label className="checkbox-row">
-                <input
-                  type="checkbox"
-                  checked={!!draft.autoAnswer.enabled}
-                  onChange={(e) => setDraft((d) => ({
-                    ...d, autoAnswer: { ...d.autoAnswer, enabled: e.target.checked }
-                  }))}
-                />
-                <span>Answer detected questions automatically</span>
-              </label>
-              <label className="checkbox-row">
-                <input
-                  type="checkbox"
-                  checked={!!draft.autoAnswer.speculative}
-                  onChange={(e) => setDraft((d) => ({
-                    ...d, autoAnswer: { ...d.autoAnswer, speculative: e.target.checked }
-                  }))}
-                />
-                <span>Start answering before the question finishes (costs extra requests)</span>
-              </label>
-              <div className="limit-row">
-                <span className="limit-name">Confidence to fire</span>
-                <label className="limit-input">
-                  <span>0-1</span>
+              <div className="setting-group">
+                <label className="setting-label">Auto-answer</label>
+                <p className="setting-hint">
+                  Off by default. When armed, detected questions are answered without a hotkey —
+                  which spends your quota on its own. Manual presses always win.
+                </p>
+                <label className="checkbox-row">
                   <input
-                    type="number" min="0.1" max="1" step="0.05"
-                    value={draft.autoAnswer.threshold}
-                    onChange={(e) => setDraft((d) => ({
-                      ...d,
-                      autoAnswer: { ...d.autoAnswer, threshold: Math.min(1, Math.max(0.1, Number(e.target.value) || 0.7)) }
-                    }))}
+                    type="checkbox"
+                    checked={!!draft.autoAnswer.enabled}
+                    onChange={(e) =>
+                      setDraft((d) => ({
+                        ...d,
+                        autoAnswer: { ...d.autoAnswer, enabled: e.target.checked }
+                      }))
+                    }
                   />
+                  <span>Answer detected questions automatically</span>
                 </label>
-              </div>
-              <div className="limit-row">
-                <span className="limit-name">Pacing</span>
-                <label className="limit-input">
-                  <span>cooldown s</span>
+                <label className="checkbox-row">
                   <input
-                    type="number" min="0"
-                    value={Math.round(draft.autoAnswer.cooldownMs / 1000)}
-                    onChange={(e) => setDraft((d) => ({
-                      ...d,
-                      autoAnswer: { ...d.autoAnswer, cooldownMs: Math.max(0, Number(e.target.value) || 0) * 1000 }
-                    }))}
+                    type="checkbox"
+                    checked={!!draft.autoAnswer.speculative}
+                    onChange={(e) =>
+                      setDraft((d) => ({
+                        ...d,
+                        autoAnswer: { ...d.autoAnswer, speculative: e.target.checked }
+                      }))
+                    }
                   />
+                  <span>Start answering before the question finishes (costs extra requests)</span>
                 </label>
-                <label className="limit-input">
-                  <span>max/min</span>
-                  <input
-                    type="number" min="1"
-                    value={draft.autoAnswer.maxPerMinute}
-                    onChange={(e) => setDraft((d) => ({
-                      ...d,
-                      autoAnswer: { ...d.autoAnswer, maxPerMinute: Math.max(1, Number(e.target.value) || 1) }
-                    }))}
-                  />
-                </label>
-              </div>
-            </div>
-            <div className="setting-group">
-              <label className="setting-label">Transcript window</label>
-              <p className="setting-hint">
-                Only the most recent turns go to the model; everything older is folded into a
-                running summary.
-              </p>
-              <div className="limit-row">
-                <span className="limit-name">Turns kept verbatim</span>
-                <label className="limit-input">
-                  <span>turns</span>
-                  <input
-                    type="number"
-                    min="4"
-                    value={draft.transcript.windowTurns}
-                    onChange={(e) => setDraft((d) => ({
-                      ...d,
-                      transcript: { ...d.transcript, windowTurns: Math.max(4, Number(e.target.value) || 4) }
-                    }))}
-                  />
-                </label>
-                <label className="limit-input">
-                  <span>token cap</span>
-                  <input
-                    type="number"
-                    min="500"
-                    step="500"
-                    value={draft.transcript.maxPromptTokens}
-                    onChange={(e) => setDraft((d) => ({
-                      ...d,
-                      transcript: { ...d.transcript, maxPromptTokens: Math.max(500, Number(e.target.value) || 500) }
-                    }))}
-                  />
-                </label>
-              </div>
-            </div>
-            <div className="setting-group">
-              <label className="setting-label">Request budget per provider</label>
-              <p className="setting-hint">
-                Free tiers cap requests per minute and per day. Sidecar queues rather than fails,
-                and always runs your hotkey before background work.
-              </p>
-              {providers.map((p) => {
-                const limits = draft.rateLimits[p.id] || { rpm: 60, rpd: 1000 };
-                return (
-                  <div className="limit-row" key={p.id}>
-                    <span className="limit-name">{p.name}</span>
-                    <label className="limit-input">
-                      <span>per min</span>
-                      <input
-                        type="number"
-                        min="1"
-                        value={limits.rpm}
-                        onChange={(e) => setDraft((d) => ({
+                <div className="limit-row">
+                  <span className="limit-name">Confidence to fire</span>
+                  <label className="limit-input">
+                    <span>0-1</span>
+                    <input
+                      type="number"
+                      min="0.1"
+                      max="1"
+                      step="0.05"
+                      value={draft.autoAnswer.threshold}
+                      onChange={(e) =>
+                        setDraft((d) => ({
                           ...d,
-                          rateLimits: {
-                            ...d.rateLimits,
-                            [p.id]: { ...limits, rpm: Math.max(1, Number(e.target.value) || 1) }
+                          autoAnswer: {
+                            ...d.autoAnswer,
+                            threshold: Math.min(1, Math.max(0.1, Number(e.target.value) || 0.7))
                           }
-                        }))}
-                      />
-                    </label>
-                    <label className="limit-input">
-                      <span>per day</span>
-                      <input
-                        type="number"
-                        min="1"
-                        value={limits.rpd}
-                        onChange={(e) => setDraft((d) => ({
+                        }))
+                      }
+                    />
+                  </label>
+                </div>
+                <div className="limit-row">
+                  <span className="limit-name">Pacing</span>
+                  <label className="limit-input">
+                    <span>cooldown s</span>
+                    <input
+                      type="number"
+                      min="0"
+                      value={Math.round(draft.autoAnswer.cooldownMs / 1000)}
+                      onChange={(e) =>
+                        setDraft((d) => ({
                           ...d,
-                          rateLimits: {
-                            ...d.rateLimits,
-                            [p.id]: { ...limits, rpd: Math.max(1, Number(e.target.value) || 1) }
+                          autoAnswer: {
+                            ...d.autoAnswer,
+                            cooldownMs: Math.max(0, Number(e.target.value) || 0) * 1000
                           }
-                        }))}
-                      />
-                    </label>
-                  </div>
-                );
-              })}
-            </div>
+                        }))
+                      }
+                    />
+                  </label>
+                  <label className="limit-input">
+                    <span>max/min</span>
+                    <input
+                      type="number"
+                      min="1"
+                      value={draft.autoAnswer.maxPerMinute}
+                      onChange={(e) =>
+                        setDraft((d) => ({
+                          ...d,
+                          autoAnswer: {
+                            ...d.autoAnswer,
+                            maxPerMinute: Math.max(1, Number(e.target.value) || 1)
+                          }
+                        }))
+                      }
+                    />
+                  </label>
+                </div>
+              </div>
+              <div className="setting-group">
+                <label className="setting-label">Transcript window</label>
+                <p className="setting-hint">
+                  Only the most recent turns go to the model; everything older is folded into a
+                  running summary.
+                </p>
+                <div className="limit-row">
+                  <span className="limit-name">Turns kept verbatim</span>
+                  <label className="limit-input">
+                    <span>turns</span>
+                    <input
+                      type="number"
+                      min="4"
+                      value={draft.transcript.windowTurns}
+                      onChange={(e) =>
+                        setDraft((d) => ({
+                          ...d,
+                          transcript: {
+                            ...d.transcript,
+                            windowTurns: Math.max(4, Number(e.target.value) || 4)
+                          }
+                        }))
+                      }
+                    />
+                  </label>
+                  <label className="limit-input">
+                    <span>token cap</span>
+                    <input
+                      type="number"
+                      min="500"
+                      step="500"
+                      value={draft.transcript.maxPromptTokens}
+                      onChange={(e) =>
+                        setDraft((d) => ({
+                          ...d,
+                          transcript: {
+                            ...d.transcript,
+                            maxPromptTokens: Math.max(500, Number(e.target.value) || 500)
+                          }
+                        }))
+                      }
+                    />
+                  </label>
+                </div>
+              </div>
+              <div className="setting-group">
+                <label className="setting-label">Request budget per provider</label>
+                <p className="setting-hint">
+                  Free tiers cap requests per minute and per day. Sidecar queues rather than fails,
+                  and always runs your hotkey before background work.
+                </p>
+                {providers.map((p) => {
+                  const limits = draft.rateLimits[p.id] || { rpm: 60, rpd: 1000 };
+                  return (
+                    <div className="limit-row" key={p.id}>
+                      <span className="limit-name">{p.name}</span>
+                      <label className="limit-input">
+                        <span>per min</span>
+                        <input
+                          type="number"
+                          min="1"
+                          value={limits.rpm}
+                          onChange={(e) =>
+                            setDraft((d) => ({
+                              ...d,
+                              rateLimits: {
+                                ...d.rateLimits,
+                                [p.id]: { ...limits, rpm: Math.max(1, Number(e.target.value) || 1) }
+                              }
+                            }))
+                          }
+                        />
+                      </label>
+                      <label className="limit-input">
+                        <span>per day</span>
+                        <input
+                          type="number"
+                          min="1"
+                          value={limits.rpd}
+                          onChange={(e) =>
+                            setDraft((d) => ({
+                              ...d,
+                              rateLimits: {
+                                ...d.rateLimits,
+                                [p.id]: { ...limits, rpd: Math.max(1, Number(e.target.value) || 1) }
+                              }
+                            }))
+                          }
+                        />
+                      </label>
+                    </div>
+                  );
+                })}
+              </div>
             </>
           )}
 
@@ -503,8 +602,12 @@ export default function SettingsModal({ isOpen, onClose, sidecar }) {
         </div>
 
         <div className="modal-footer">
-          <button className="btn-cancel" onClick={onClose}>Cancel</button>
-          <button className="btn-save" onClick={handleSave}>Save Settings</button>
+          <button className="btn-cancel" onClick={onClose}>
+            Cancel
+          </button>
+          <button className="btn-save" onClick={handleSave}>
+            Save Settings
+          </button>
         </div>
       </div>
     </div>

@@ -11,7 +11,10 @@ const BASE_RECONNECT_MS = 600;
  * Electron's main process has no global WebSocket, hence the `ws` dependency. Keys must
  * not leave main, so the socket cannot live in the renderer.
  */
-function createStreamingSession({ url, headers, protocols, onOpenMessage, parseMessage, encodeAudio }, handlers) {
+function createStreamingSession(
+  { url, headers, protocols, onOpenMessage, parseMessage, encodeAudio },
+  handlers
+) {
   const state = {
     socket: null,
     open: false,
@@ -39,7 +42,8 @@ function createStreamingSession({ url, headers, protocols, onOpenMessage, parseM
       state.attempts = 0;
       if (onOpenMessage) {
         const message = onOpenMessage();
-        if (message) state.socket.send(typeof message === 'string' ? message : JSON.stringify(message));
+        if (message)
+          state.socket.send(typeof message === 'string' ? message : JSON.stringify(message));
       }
       for (const chunk of state.pending) state.socket.send(chunk);
       state.pending = [];
@@ -76,7 +80,9 @@ function createStreamingSession({ url, headers, protocols, onOpenMessage, parseM
       }
       const delay = BASE_RECONNECT_MS * 2 ** state.attempts + Math.floor(Math.random() * 250);
       state.attempts += 1;
-      const timer = setTimeout(() => { if (!state.closed) connect(); }, delay);
+      const timer = setTimeout(() => {
+        if (!state.closed) connect();
+      }, delay);
       if (timer.unref) timer.unref();
     });
   }
@@ -108,7 +114,9 @@ function createStreamingSession({ url, headers, protocols, onOpenMessage, parseM
       state.pending = [];
       try {
         if (state.socket) state.socket.close();
-      } catch (e) { /* already gone */ }
+      } catch (e) {
+        /* already gone */
+      }
     }
   };
 }
