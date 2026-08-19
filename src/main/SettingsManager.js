@@ -64,6 +64,32 @@ class SettingsManager {
         custom: { rpm: 60, rpd: 1000 }
       },
 
+      capture: {
+        // '' means "the primary screen"; otherwise a desktopCapturer source id.
+        sourceId: '',
+        // Fractions of the source, so the crop survives a resolution change.
+        region: null,
+        maxWidth: 1280,
+        skipUnchanged: true
+      },
+
+      overlay: {
+        opacity: 1,
+        fontScale: 1,
+        density: 'comfortable',
+        // Restored on launch; null until the window has been moved once.
+        bounds: null,
+        hidden: false
+      },
+
+      shortcuts: {
+        assist: 'CommandOrControl+Return',
+        code: 'CommandOrControl+H',
+        quickAssist: 'CommandOrControl+G',
+        toggleOverlay: 'CommandOrControl+Shift+H',
+        quit: 'CommandOrControl+Shift+X'
+      },
+
       answers: {
         // Nobody can read prose while talking, so bullets are the default.
         preset: 'speak-points',
