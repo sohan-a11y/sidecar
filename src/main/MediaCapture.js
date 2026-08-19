@@ -36,14 +36,24 @@ class MediaCapture {
     return this.isListening;
   }
 
+  /** @returns {Buffer|null} the chunk, so streaming engines can forward it as it arrives */
   appendAudioChunk(source, arrayBuffer) {
-    if (!this.isListening) return;
+    if (!this.isListening) return null;
+    if (source !== 'user' && source !== 'system') return null;
     const buffer = Buffer.from(arrayBuffer);
-    if (source === 'user') {
-      this.audioBuffers.user.push(buffer);
-    } else if (source === 'system') {
-      this.audioBuffers.system.push(buffer);
+    this.audioBuffers[source].push(buffer);
+    // Bound the buffer: a VAD that never fires 'end' must not eat memory.
+    // 16 kHz mono Int16 = 32 kB/s, so 60 s is ~1.9 MB per channel.
+    let total = 0;
+    for (const chunk of this.audioBuffers[source]) total += chunk.length;
+    while (total > 32000 * 60 && this.audioBuffers[source].length > 1) {
+      total -= this.audioBuffers[source].shift().length;
     }
+    return buffer;
+  }
+
+  clearChannel(source) {
+    if (this.audioBuffers[source]) this.audioBuffers[source] = [];
   }
 
   getAndFlushAudio(source) {

@@ -1,51 +1,158 @@
 const Providers = require('./providers');
+const SttEngines = require('./stt');
 const SettingsManager = require('./SettingsManager');
-const RateLimiter = require('./RateLimiter');
 
-// Cheap pre-gate so dead air never costs a request. Phase 3 replaces this with real VAD.
+// Cheap pre-gate so dead air never costs a request, kept in front of the VAD.
 const SILENCE_RMS_THRESHOLD = 250;
+const CHANNELS = ['user', 'system'];
 
 /**
- * Turns raw 16 kHz mono Int16 PCM into text via whichever adapter the user configured
- * for speech-to-text. STT provider and key are independent of the chat provider
- * (BUILD-PLAN 0.4), so picking Anthropic for chat no longer kills transcription.
+ * Per-channel speech-to-text. Streaming engines hold one socket per channel so the two
+ * speakers never bleed into each other; the batch engine buffers a VAD-delimited
+ * utterance and uploads it.
+ *
+ * Emits { text, isFinal, channel, startMs, endMs, confidence } — no consumer assumes
+ * fixed 3.5 s chunks or English (BUILD-PLAN 3 Contract).
  */
 class TranscriptionService {
   constructor() {
+    this.onResult = null;
     this.onStatus = null;
+    this.sessions = { user: null, system: null };
+    this.active = false;
+    this.degraded = false;
   }
 
   status(message) {
     if (typeof this.onStatus === 'function') this.onStatus(message);
   }
 
-  /** Which STT provider is configured, and can it actually run? */
-  readiness() {
+  config() {
+    const settings = SettingsManager.get();
     const eff = SettingsManager.effective();
-    const { provider, apiKey, baseUrl } = eff.stt;
+    const engineId = this.degraded ? 'batch' : (settings.stt.engine || 'batch');
+    return {
+      engineId,
+      engine: SttEngines.has(engineId) ? SttEngines.get(engineId) : SttEngines.get('batch'),
+      languages: settings.stt.languages || { user: 'auto', system: 'auto' },
+      engineKeys: settings.stt.engineKeys || {},
+      engineModels: settings.stt.engineModels || {},
+      provider: eff.stt
+    };
+  }
 
-    if (!Providers.has(provider)) {
-      return { ready: false, reason: `Unknown transcription provider "${provider}". Pick one in Settings.` };
+  /** Whether transcription can run right now, and why not if it cannot. */
+  readiness() {
+    const { engineId, engine, engineKeys, provider } = this.config();
+
+    if (engine.streaming) {
+      if (!engineKeys[engineId]) {
+        return { ready: false, reason: `${engine.name} needs an API key. Add one in Settings → Speech.` };
+      }
+      return { ready: true, streaming: true };
     }
-    const adapter = Providers.get(provider);
+
+    if (!Providers.has(provider.provider)) {
+      return { ready: false, reason: `Unknown transcription provider "${provider.provider}".` };
+    }
+    const adapter = Providers.get(provider.provider);
     if (!adapter.capabilities.transcription || typeof adapter.transcribe !== 'function') {
-      return { ready: false, reason: `${adapter.name} cannot transcribe audio. Choose another transcription provider in Settings.` };
+      return { ready: false, reason: `${adapter.name} cannot transcribe audio. Choose another provider in Settings.` };
     }
-    if (!apiKey && provider !== 'custom') {
+    if (!provider.apiKey && provider.provider !== 'custom') {
       return { ready: false, reason: `Transcription needs a ${adapter.name} API key. Add one in Settings.` };
     }
-    if (adapter.requiresBaseUrl && !baseUrl) {
-      return { ready: false, reason: `${adapter.name} transcription needs a base URL. Add one in Settings.` };
+    if (adapter.requiresBaseUrl && !provider.baseUrl) {
+      return { ready: false, reason: `${adapter.name} transcription needs a base URL.` };
     }
-    return { ready: true, provider, adapter, eff };
+    return { ready: true, streaming: false };
+  }
+
+  // ------------------------------------------------------------------- lifecycle
+
+  start() {
+    this.active = true;
+    const { engine } = this.config();
+    if (!engine.streaming) return;
+
+    const state = this.readiness();
+    if (!state.ready) {
+      this.status(state.reason);
+      return;
+    }
+    for (const channel of CHANNELS) this.openChannel(channel);
+  }
+
+  openChannel(channel) {
+    const { engineId, engine, engineKeys, engineModels, languages } = this.config();
+    if (!engine.streaming || this.sessions[channel]) return;
+
+    this.sessions[channel] = engine.createSession(
+      {
+        apiKey: engineKeys[engineId],
+        model: engineModels[engineId] || engine.defaultModel,
+        language: languages[channel] || 'auto',
+        sampleRate: 16000,
+        channel
+      },
+      {
+        onResult: (result) => {
+          if (typeof this.onResult === 'function') {
+            this.onResult({ ...result, channel });
+          }
+        },
+        onError: (err) => {
+          console.warn(`[TranscriptionService] ${engineId} ${channel} socket error:`, err.message);
+        },
+        onGiveUp: () => {
+          // Repeated failures: drop to batch rather than silently transcribing nothing.
+          if (this.degraded) return;
+          this.degraded = true;
+          this.closeAll();
+          this.status(`${engine.name} kept dropping the connection — falling back to batch transcription.`);
+        }
+      }
+    );
+  }
+
+  stop() {
+    this.active = false;
+    this.closeAll();
+  }
+
+  closeAll() {
+    for (const channel of CHANNELS) {
+      if (this.sessions[channel]) {
+        this.sessions[channel].close();
+        this.sessions[channel] = null;
+      }
+    }
+  }
+
+  /** Clear a runtime downgrade so a settings change gets a fresh attempt. */
+  reset() {
+    this.degraded = false;
+    this.closeAll();
+    if (this.active) this.start();
+  }
+
+  isStreaming() {
+    return this.config().engine.streaming && !this.degraded;
+  }
+
+  // ----------------------------------------------------------------------- audio
+
+  /** Continuous audio for streaming engines. Batch engines ignore this. */
+  pushAudio(channel, pcm) {
+    const session = this.sessions[channel];
+    if (session) session.sendAudio(pcm);
   }
 
   /**
-   * @param {Buffer} pcmBuffer raw 16-bit little-endian mono PCM at 16 kHz
-   * @param {'user'|'system'} sourceChannel which side of the call this came from
-   * @returns {Promise<string>} transcript text, or '' when the chunk was silence
+   * One complete utterance, delimited by VAD. Only used by the batch engine.
+   * @returns {Promise<string>} '' when the segment was silence
    */
-  async transcribe(pcmBuffer, sourceChannel = 'unknown') {
+  async transcribeSegment(pcmBuffer, channel = 'unknown') {
     if (!pcmBuffer || pcmBuffer.length === 0) return '';
 
     const rms = this.calculateRms(pcmBuffer);
@@ -58,29 +165,18 @@ class TranscriptionService {
       throw err;
     }
 
-    const { adapter, eff, provider } = state;
+    const { provider, languages } = this.config();
     const wav = this.pcmToWav(pcmBuffer, 16000);
+    const batch = SttEngines.get('batch');
 
-    console.log(`[TranscriptionService] ${provider} <- ${sourceChannel} chunk, RMS ${rms.toFixed(0)}`);
-
-    // Transcription is deliberate background work the user switched on, so it rides at
-    // 'user' priority; Phase 4's auto-answers are the ones that must yield.
-    return RateLimiter.schedule(
-      provider,
-      {
-        priority: 'user',
-        onRetry: ({ attempt, status }) => {
-          this.status(`Transcription retry ${attempt} of 3 (${status || 'network error'}).`);
-        }
-      },
-      () => adapter.transcribe({
-        apiKey: eff.stt.apiKey,
-        baseUrl: eff.stt.baseUrl,
-        model: eff.stt.model,
-        language: eff.stt.language,
-        wav
-      })
-    );
+    return batch.transcribeSegment({
+      providerId: provider.provider,
+      apiKey: provider.apiKey,
+      baseUrl: provider.baseUrl,
+      model: provider.model,
+      language: languages[channel] || 'auto',
+      wav
+    });
   }
 
   calculateRms(buf) {
@@ -103,10 +199,9 @@ class TranscriptionService {
     const byteRate = (sampleRate * numChannels * bitsPerSample) / 8;
     const blockAlign = (numChannels * bitsPerSample) / 8;
     const dataSize = pcmBuffer.length;
-    const fileSize = 36 + dataSize;
 
     wavHeader.write('RIFF', 0);
-    wavHeader.writeUInt32LE(fileSize, 4);
+    wavHeader.writeUInt32LE(36 + dataSize, 4);
     wavHeader.write('WAVE', 8);
     wavHeader.write('fmt ', 12);
     wavHeader.writeUInt32LE(16, 16);

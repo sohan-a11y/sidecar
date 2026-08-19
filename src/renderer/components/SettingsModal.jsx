@@ -3,6 +3,7 @@ import ModelPicker from './settings/ModelPicker';
 import KeyField from './settings/KeyField';
 import ContextTab from './settings/ContextTab';
 import SessionsTab from './settings/SessionsTab';
+import SpeechTab from './settings/SpeechTab';
 
 const KEY_PLACEHOLDERS = {
   openai: 'sk-...',
@@ -38,6 +39,7 @@ export default function SettingsModal({ isOpen, onClose, sidecar }) {
   const [draft, setDraft] = useState(null);
   const [keyDrafts, setKeyDrafts] = useState({});
   const [modelLists, setModelLists] = useState({});
+  const [sttEngines, setSttEngines] = useState([]);
   const [saveStatus, setSaveStatus] = useState('');
 
   useEffect(() => {
@@ -59,6 +61,7 @@ export default function SettingsModal({ isOpen, onClose, sidecar }) {
       ]);
       setView(data);
       setContext(contextData);
+      setSttEngines(await sidecar.listSttEngines());
       setDraft({
         llm: JSON.parse(JSON.stringify(data.llm)),
         stt: JSON.parse(JSON.stringify(data.stt)),
@@ -152,11 +155,14 @@ export default function SettingsModal({ isOpen, onClose, sidecar }) {
           apiKeys: collectKeys('llm', providers.map((p) => p.id))
         },
         stt: {
+          engine: draft.stt.engine,
           provider: draft.stt.provider,
-          language: draft.stt.language,
+          languages: draft.stt.languages,
           baseUrl: draft.stt.baseUrl.trim(),
           models: draft.stt.models,
-          apiKeys: collectKeys('stt', sttProviders.map((p) => p.id))
+          engineModels: draft.stt.engineModels,
+          apiKeys: collectKeys('stt', sttProviders.map((p) => p.id)),
+          engineKeys: collectKeys('sttEngine', sttEngines.map((e) => e.id))
         },
         rateLimits: draft.rateLimits,
         sessions: draft.sessions,
@@ -308,90 +314,17 @@ export default function SettingsModal({ isOpen, onClose, sidecar }) {
           )}
 
           {tab === 'speech' && (
-            <>
-              <div className="setting-group">
-                <label className="setting-label">Transcription provider</label>
-                <div className="provider-tabs">
-                  {sttProviders.map((p) => (
-                    <button
-                      key={p.id}
-                      className={`provider-tab-btn ${draft.stt.provider === p.id ? 'active' : ''}`}
-                      onClick={() => patchStt({ provider: p.id })}
-                    >
-                      {p.id === 'custom' ? 'CUSTOM' : p.name.split(' ')[0].toUpperCase()}
-                    </button>
-                  ))}
-                </div>
-                <p className="setting-hint">
-                  Independent of the chat provider — chat with Anthropic while transcribing with OpenAI.
-                </p>
-              </div>
-
-              <div className="setting-group">
-                <label className="setting-label">Transcription model</label>
-                <div className="input-field">
-                  <input
-                    type="text"
-                    spellCheck="false"
-                    value={draft.stt.models[draft.stt.provider] || ''}
-                    onChange={(e) => patchStt({
-                      models: { ...draft.stt.models, [draft.stt.provider]: e.target.value }
-                    })}
-                  />
-                </div>
-              </div>
-
-              {draft.stt.provider === 'custom' && (
-                <div className="setting-group">
-                  <label className="setting-label">Transcription base URL</label>
-                  <div className="input-field">
-                    <input
-                      type="text"
-                      spellCheck="false"
-                      placeholder="http://localhost:8080/v1"
-                      value={draft.stt.baseUrl}
-                      onChange={(e) => patchStt({ baseUrl: e.target.value })}
-                    />
-                  </div>
-                </div>
-              )}
-
-              <div className="setting-group">
-                <label className="setting-label">Spoken language</label>
-                <div className="input-field">
-                  <select
-                    className="setting-select"
-                    value={draft.stt.language}
-                    onChange={(e) => patchStt({ language: e.target.value })}
-                  >
-                    {LANGUAGES.map(([code, label]) => (
-                      <option key={code} value={code}>{label}</option>
-                    ))}
-                  </select>
-                </div>
-                <p className="setting-hint">
-                  Auto-detect is the safest choice for mixed-language speech.
-                </p>
-              </div>
-
-              <div className="setting-group">
-                <label className="setting-label">Transcription API keys</label>
-                {sttProviders.map((p) => (
-                  <KeyField
-                    key={p.id}
-                    label={p.name.split(' ')[0]}
-                    placeholder={KEY_PLACEHOLDERS[p.id] || ''}
-                    stored={!!(view.keyPresence.stt || {})[p.id]}
-                    value={keyDraftValue('stt', p.id)}
-                    onChange={(v) => setKeyDraft('stt', p.id, v)}
-                    onClear={() => setKeyDraft('stt', p.id, null)}
-                  />
-                ))}
-                <p className="setting-hint">
-                  Kept separate from the chat keys so you can use different accounts.
-                </p>
-              </div>
-            </>
+            <SpeechTab
+              draft={draft}
+              view={view}
+              engines={sttEngines}
+              sttProviders={sttProviders}
+              languages={LANGUAGES}
+              keyPlaceholders={KEY_PLACEHOLDERS}
+              patchStt={patchStt}
+              keyDraftValue={keyDraftValue}
+              setKeyDraft={setKeyDraft}
+            />
           )}
 
           {tab === 'limits' && (
