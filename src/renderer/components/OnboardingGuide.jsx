@@ -28,22 +28,32 @@ const ONBOARD_STEPS = [
   {
     icon: '3',
     title: 'Add API Credentials',
-    body: 'Sidecar connects directly to your own OpenAI, Anthropic, or Google Gemini keys so you only pay for what you use. Enter your credentials in preferences to start.'
+    body: 'Sidecar connects directly to your own provider keys — OpenAI, Anthropic, Gemini, TokenRouter, or any OpenAI-compatible endpoint including a local one — so you only pay for what you use. Keys are encrypted with your OS keychain and are never sent anywhere except to that provider.'
   },
   {
     icon: '4',
+    title: 'What leaves your machine',
+    body: 'There is no Sidecar server. Audio goes to the transcription provider you choose, only while capture is on. Screenshots go to your chat provider, only when a mode needs one. Transcripts, your profile and your settings are stored locally in your user data folder, and Settings has a delete button for each of them. Nothing is uploaded for training, analytics or crash reporting.',
+    buttons: [
+      { label: 'Read the full privacy statement', action: 'https://github.com/sohan-a11y/sidecar/blob/main/PRIVACY.md' }
+    ]
+  },
+  {
+    icon: '5',
     title: isMac ? 'Zoom Invisibility' : 'Screen Share Invisibility',
     body: isMac
       ? 'Sidecar is automatically hidden in Google Meet and Microsoft Teams. For Zoom, go to Zoom Settings > Share Screen > Advanced and choose "Advanced capture with window filtering" to protect overlay privacy.'
       : 'Sidecar uses Windows content protection to hide from most screen capture tools. On Windows 10 version 2004 or later, the overlay is fully invisible to screen shares and recording tools. On older versions, it may appear as a black rectangle.'
   },
   {
-    icon: '5',
+    icon: '6',
     title: 'Shortcut Reference',
-    body: 'Trigger Sidecar from anywhere using your keyboard:',
+    body: 'Trigger Sidecar from anywhere using your keyboard. All of these are remappable in Settings > Screen.',
     shortcuts: [
       { keys: [modKey, 'Enter'], action: 'Trigger Assist' },
       { keys: [modKey, 'H'], action: 'Solve screen contents' },
+      { keys: [modKey, 'G'], action: 'Start listening and assist' },
+      { keys: [modKey, 'Shift', 'H'], action: 'Hide or show the overlay' },
       { keys: [modKey, 'Shift', 'X'], action: 'Quit application' }
     ]
   }

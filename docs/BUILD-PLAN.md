@@ -12,7 +12,7 @@ Scope note: no backend, no accounts, no billing, no telemetry. BYO-key, local-on
 - [x] Phase 4 — Question detection + auto-answer
 - [x] Phase 5 — Answer UX + follow-up threading
 - [x] Phase 6 — Capture + overlay controls
-- [ ] Phase 7 — Open-source hygiene (can run any time after Phase 0)
+- [x] Phase 7 — Open-source hygiene (can run any time after Phase 0)
 
 ---
 
@@ -470,3 +470,24 @@ Runnable any time after Phase 0.
 - `docs/adr/` for decisions worth recording — provider abstraction, STT choice, no-backend stance.
 - Privacy statement in-repo and in-app: what is captured, where it goes, what is stored locally,
   how to delete it. For an app that records audio, this is table stakes.
+
+**Landed** (`phase-7-oss-hygiene`):
+
+- `CONTRIBUTING.md` (setup, phase model, the rules that break the app if ignored),
+  `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1, reporting via private advisory), `SECURITY.md`
+  (private disclosure plus a data-flow table and known limitations).
+- Issue templates (bug, feature) with a security contact link, a PR template whose checklist
+  encodes the hard rules, and `docs/LABELS.md` for the label taxonomy.
+- CI on PR and pushes to main: `npm ci`, lint, unit tests, build.
+- ESLint flat config plus a Prettier config, scoped per source area. Deliberately minimal — real
+  mistakes only, and **no tree-wide reformat**, so `git blame` survives. Currently 0 errors,
+  3 warnings, all pre-existing.
+- README restructured: what it is, honest limitations, install, BYO-key setup, provider matrix,
+  architecture diagram, contributing, licence.
+- `docs/adr/` with five decisions: no backend, provider abstraction, key storage, client-side rate
+  limiting, STT transport.
+- `PRIVACY.md`, and a new onboarding step in-app covering what leaves the machine and how to
+  delete it.
+
+**Fixed while testing:** the module-load test could exceed vitest's 5 s default because pdf-parse
+loads a ~6 MB bundle, making the suite intermittently red. It now has an explicit timeout.

@@ -2,8 +2,6 @@ const LlmService = require('./LlmService');
 const ContextStore = require('./ContextStore');
 const SettingsManager = require('./SettingsManager');
 
-const BLOCK_SEPARATOR = String.fromCharCode(10, 10);
-
 const MAX_STORIES = 3;
 const MAX_JD_CHARS = 4000;
 

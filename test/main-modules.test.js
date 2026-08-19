@@ -49,7 +49,9 @@ afterAll(() => {
 });
 
 describe('main process modules', () => {
-  it('all load without throwing', () => {
+  // ContextStore pulls in pdf-parse, which loads a ~6 MB pdf.js bundle. Under parallel
+  // test load that can exceed the 5 s default and fail for no real reason.
+  it('all load without throwing', { timeout: 30000 }, () => {
     const modules = [
       '../src/main/KeyStore.js',
       '../src/main/RateLimiter.js',
