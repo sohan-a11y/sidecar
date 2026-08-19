@@ -1,6 +1,5 @@
 const fs = require('fs');
 const path = require('path');
-const { app } = require('electron');
 const SettingsManager = require('./SettingsManager');
 const ContextStore = require('./ContextStore');
 
