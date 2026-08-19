@@ -10,7 +10,9 @@
     "build": "vite build",
     "start": "electron .",
     "pack": "npm run build && electron-builder",
-    "pack:win": "npm run build && electron-builder --win"
+    "pack:win": "npm run build && electron-builder --win",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "build": {
     "appId": "com.sidecar.app",
@@ -41,7 +43,9 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "icon": "docs/icon.ico"
@@ -65,6 +69,7 @@
     "@vitejs/plugin-react": "^4.3.4",
     "electron": "^33.2.1",
     "electron-builder": "^24.13.3",
-    "vite": "^5.4.11"
+    "vite": "^5.4.11",
+    "vitest": "^4.1.11"
   }
 }

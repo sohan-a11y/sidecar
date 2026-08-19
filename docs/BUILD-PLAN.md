@@ -5,7 +5,7 @@ assume) — treat the Contract as the acceptance criteria.
 
 Scope note: no backend, no accounts, no billing, no telemetry. BYO-key, local-only, MIT.
 
-- [ ] Phase 0 — Provider abstraction, TokenRouter, STT/LLM split, rate limiting
+- [x] Phase 0 — Provider abstraction, TokenRouter, STT/LLM split, rate limiting
 - [ ] Phase 1 — Context layer (resume, JD, profile, story bank)
 - [ ] Phase 2 — Live transcript UI + sessions
 - [ ] Phase 3 — Streaming ASR + multilingual
@@ -102,6 +102,27 @@ is not acceptable.
 **Contract:** any module can call `LlmService.stream({ mode, images, messages, signal }, onToken)`
 without knowing the provider; vision is safe to request; STT and chat are independently configured;
 all model calls pass through the rate limiter.
+
+**Landed** (`phase-0-providers`):
+
+- `src/main/providers/` — `openai`, `anthropic`, `gemini`, `openaiCompatible` factory (backs both
+  TokenRouter and Custom), shared `util.js`, registry `index.js`. `LlmService` is now a dispatcher.
+- TokenRouter via `GET /v1/models` with settings-cached list, free-model fallback, seed defaults.
+- Vision gating: per-model capability from provider metadata → id heuristic → manual override;
+  `visionModel` routing; images dropped with a one-time notice rather than hard-failing.
+- `llm` / `stt` settings blocks with v1 → v2 migration preserving the old STT derivation rule.
+- `RateLimiter.js`: per-provider rpm/rpd, priority queue, Retry-After + jittered backoff (3 tries),
+  daily counter in `sidecar-usage.json`, budget surfaced in the composer.
+- `KeyStore.js`: keys sealed with `safeStorage`; the renderer receives presence flags, never values.
+
+**Deviations from the spec above, and why:**
+
+- Settings store `llm.models[provider] = { standard, advanced, vision }` rather than a flat
+  `{ model, visionModel }`. The flat shape would have discarded the existing Smart Mode
+  standard/advanced pair and reset model choices on every provider switch.
+  `SettingsManager.effective()` returns the flat shape the Contract describes.
+- `stt.apiKeys` is a separate block as specified, but the renderer never receives key values at
+  all — main returns presence flags only. Blank means "keep", `null` means "clear".
 
 ---
 
