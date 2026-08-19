@@ -1,6 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 
-export default function Composer({ userText, setUserText, isSmart, onToggleSmart, onOpenSettings, onSubmit }) {
+export default function Composer({ userText, setUserText, isSmart, onToggleSmart, onOpenSettings, onSubmit, usage }) {
   const textareaRef = useRef(null);
 
   useEffect(() => {
@@ -34,6 +34,10 @@ export default function Composer({ userText, setUserText, isSmart, onToggleSmart
     </svg>
   );
 
+  // Budget is only worth screen space once it starts to matter.
+  const showBudget = usage && (usage.remainingDay <= usage.rpd * 0.5 || usage.queued > 0 || usage.throttledUntil);
+  const budgetTone = !usage ? '' : usage.remainingDay === 0 ? 'is-empty' : usage.remainingDay <= 10 ? 'is-low' : '';
+
   return (
     <div className="composer-container no-drag">
       <div className="input-textarea-wrapper">
@@ -65,6 +69,15 @@ export default function Composer({ userText, setUserText, isSmart, onToggleSmart
           {gearIcon}
         </button>
         
+        {showBudget && (
+          <span
+            className={`budget-pill ${budgetTone}`}
+            title={`${usage.remainingMinute} left this minute · ${usage.remainingDay} left today`}
+          >
+            {usage.queued > 0 ? `${usage.queued} queued · ` : ''}{usage.remainingDay} left today
+          </span>
+        )}
+
         <div className="spacer"></div>
         
         <button 

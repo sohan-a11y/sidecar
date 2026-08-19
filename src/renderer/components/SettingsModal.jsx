@@ -1,82 +1,159 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import ModelPicker from './settings/ModelPicker';
+import KeyField from './settings/KeyField';
+
+const KEY_PLACEHOLDERS = {
+  openai: 'sk-...',
+  anthropic: 'sk-ant-...',
+  gemini: 'AIza...',
+  tokenrouter: 'tr-...',
+  custom: 'optional for local servers'
+};
+
+const LANGUAGES = [
+  ['auto', 'Auto-detect'], ['en', 'English'], ['hi', 'Hindi'], ['te', 'Telugu'],
+  ['ta', 'Tamil'], ['bn', 'Bengali'], ['mr', 'Marathi'], ['gu', 'Gujarati'],
+  ['kn', 'Kannada'], ['ml', 'Malayalam'], ['pa', 'Punjabi'], ['ur', 'Urdu'],
+  ['es', 'Spanish'], ['fr', 'French'], ['de', 'German'], ['pt', 'Portuguese'],
+  ['it', 'Italian'], ['nl', 'Dutch'], ['ru', 'Russian'], ['ar', 'Arabic'],
+  ['zh', 'Chinese'], ['ja', 'Japanese'], ['ko', 'Korean'], ['tr', 'Turkish'],
+  ['id', 'Indonesian'], ['vi', 'Vietnamese']
+];
+
+const TABS = [
+  ['models', 'Models'],
+  ['speech', 'Speech'],
+  ['limits', 'Limits']
+];
 
 export default function SettingsModal({ isOpen, onClose, sidecar }) {
-  const [settings, setSettings] = useState(null);
-  const [provider, setProvider] = useState('openai');
-  const [openaiKey, setOpenaiKey] = useState('');
-  const [anthropicKey, setAnthropicKey] = useState('');
-  const [geminiKey, setGeminiKey] = useState('');
-  const [smartMode, setSmartMode] = useState(false);
-  const [modelStandard, setModelStandard] = useState('');
-  const [modelAdvanced, setModelAdvanced] = useState('');
+  const [view, setView] = useState(null);
+  const [tab, setTab] = useState('models');
+  const [draft, setDraft] = useState(null);
+  const [keyDrafts, setKeyDrafts] = useState({});
+  const [modelLists, setModelLists] = useState({});
   const [saveStatus, setSaveStatus] = useState('');
 
   useEffect(() => {
-    if (isOpen) {
-      loadSettings();
-    }
+    if (isOpen) loadSettings();
   }, [isOpen]);
 
   const loadSettings = async () => {
     try {
       const data = await sidecar.getSettings();
-      setSettings(data);
-      setProvider(data.currentProvider);
-      setOpenaiKey(data.apiKeys.openai || '');
-      setAnthropicKey(data.apiKeys.anthropic || '');
-      setGeminiKey(data.apiKeys.gemini || '');
-      setSmartMode(data.smartModeEnabled || false);
-      
-      const currentModels = data.modelPreferences[data.currentProvider] || { standard: '', advanced: '' };
-      setModelStandard(currentModels.standard);
-      setModelAdvanced(currentModels.advanced);
+      setView(data);
+      setDraft({
+        llm: JSON.parse(JSON.stringify(data.llm)),
+        stt: JSON.parse(JSON.stringify(data.stt)),
+        rateLimits: JSON.parse(JSON.stringify(data.rateLimits))
+      });
+      setKeyDrafts({});
     } catch (e) {
       console.error('Failed to load settings:', e);
     }
   };
 
-  const handleProviderChange = (newProvider) => {
-    setProvider(newProvider);
-    if (settings) {
-      const currentModels = settings.modelPreferences[newProvider] || { standard: '', advanced: '' };
-      setModelStandard(currentModels.standard);
-      setModelAdvanced(currentModels.advanced);
+  const fetchModels = useCallback(async (providerId, refresh = false) => {
+    setModelLists((prev) => ({ ...prev, [providerId]: { ...(prev[providerId] || {}), loading: true } }));
+    try {
+      const res = await sidecar.listModels(providerId, { refresh });
+      setModelLists((prev) => ({
+        ...prev,
+        [providerId]: { models: res.models || [], loading: false, error: res.ok ? '' : res.error || '' }
+      }));
+    } catch (e) {
+      setModelLists((prev) => ({ ...prev, [providerId]: { models: [], loading: false, error: e.message } }));
     }
+  }, [sidecar]);
+
+  const llmProvider = draft?.llm.provider;
+  useEffect(() => {
+    if (isOpen && llmProvider && !modelLists[llmProvider]) fetchModels(llmProvider);
+  }, [isOpen, llmProvider, modelLists, fetchModels]);
+
+  if (!isOpen || !draft || !view) return null;
+
+  const providers = view.providers || [];
+  const providerMeta = providers.find((p) => p.id === draft.llm.provider) || {};
+  const sttProviders = providers.filter((p) => p.capabilities.transcription);
+  const activeList = modelLists[draft.llm.provider] || { models: [], loading: false, error: '' };
+  const activeModels = draft.llm.models[draft.llm.provider] || { standard: '', advanced: '', vision: '' };
+
+  const patchLlm = (patch) => setDraft((d) => ({ ...d, llm: { ...d.llm, ...patch } }));
+  const patchModels = (patch) => patchLlm({
+    models: {
+      ...draft.llm.models,
+      [draft.llm.provider]: { ...activeModels, ...patch }
+    }
+  });
+  const patchStt = (patch) => setDraft((d) => ({ ...d, stt: { ...d.stt, ...patch } }));
+
+  const visionOf = (modelId) => {
+    if (!modelId) return null;
+    const override = draft.llm.visionOverrides[modelId];
+    if (typeof override === 'boolean') return override;
+    const record = activeList.models.find((m) => m.id === modelId);
+    return record ? !!record.vision : null;
+  };
+
+  const setVisionOverride = (modelId, value) => {
+    const next = { ...draft.llm.visionOverrides };
+    if (value === undefined) delete next[modelId];
+    else next[modelId] = value;
+    patchLlm({ visionOverrides: next });
+  };
+
+  const setKeyDraft = (section, providerId, value) =>
+    setKeyDrafts((prev) => ({ ...prev, [`${section}:${providerId}`]: value }));
+
+  const keyDraftValue = (section, providerId) => {
+    const raw = keyDrafts[`${section}:${providerId}`];
+    return typeof raw === 'string' ? raw : '';
+  };
+
+  const collectKeys = (section, providerIds) => {
+    const out = {};
+    for (const id of providerIds) {
+      const raw = keyDrafts[`${section}:${id}`];
+      if (raw === null) out[id] = null;          // clear
+      else if (typeof raw === 'string' && raw.trim()) out[id] = raw.trim();
+    }
+    return out;
   };
 
   const handleSave = async () => {
-    setSaveStatus('Saving...');
+    setSaveStatus('Saving…');
     try {
       const patch = {
-        currentProvider: provider,
-        smartModeEnabled: smartMode,
-        apiKeys: {
-          openai: openaiKey.trim(),
-          anthropic: anthropicKey.trim(),
-          gemini: geminiKey.trim()
+        llm: {
+          provider: draft.llm.provider,
+          baseUrl: draft.llm.baseUrl.trim(),
+          models: draft.llm.models,
+          visionOverrides: draft.llm.visionOverrides,
+          apiKeys: collectKeys('llm', providers.map((p) => p.id))
         },
-        modelPreferences: {
-          ...settings.modelPreferences,
-          [provider]: {
-            standard: modelStandard.trim(),
-            advanced: modelAdvanced.trim()
-          }
-        }
+        stt: {
+          provider: draft.stt.provider,
+          language: draft.stt.language,
+          baseUrl: draft.stt.baseUrl.trim(),
+          models: draft.stt.models,
+          apiKeys: collectKeys('stt', sttProviders.map((p) => p.id))
+        },
+        rateLimits: draft.rateLimits
       };
       const updated = await sidecar.setSettings(patch);
-      setSettings(updated);
-      setSaveStatus('Settings saved successfully!');
+      setView(updated);
+      setKeyDrafts({});
+      setSaveStatus('Settings saved');
       setTimeout(() => {
         setSaveStatus('');
         onClose();
-      }, 1000);
+      }, 900);
     } catch (e) {
       setSaveStatus('Error saving settings.');
       console.error(e);
     }
   };
-
-  if (!isOpen) return null;
 
   return (
     <div className="modal-scrim" onClick={(e) => e.target.className === 'modal-scrim' && onClose()}>
@@ -85,74 +162,247 @@ export default function SettingsModal({ isOpen, onClose, sidecar }) {
           <h2 className="modal-title">Preferences</h2>
           <button className="modal-close-btn" onClick={onClose}>Done</button>
         </div>
-        
+
+        <div className="modal-tabs">
+          {TABS.map(([id, label]) => (
+            <button
+              key={id}
+              className={`modal-tab-btn ${tab === id ? 'active' : ''}`}
+              onClick={() => setTab(id)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
         <div className="modal-body">
-          <div className="setting-group">
-            <label className="setting-label">API Provider</label>
-            <div className="provider-tabs">
-              {['openai', 'anthropic', 'gemini'].map((p) => (
-                <button 
-                  key={p} 
-                  className={`provider-tab-btn ${provider === p ? 'active' : ''}`}
-                  onClick={() => handleProviderChange(p)}
-                >
-                  {p.toUpperCase()}
-                </button>
-              ))}
-            </div>
-          </div>
+          {tab === 'models' && (
+            <>
+              <div className="setting-group">
+                <label className="setting-label">Chat provider</label>
+                <div className="provider-tabs">
+                  {providers.map((p) => (
+                    <button
+                      key={p.id}
+                      className={`provider-tab-btn ${draft.llm.provider === p.id ? 'active' : ''}`}
+                      onClick={() => patchLlm({ provider: p.id })}
+                      title={p.name}
+                    >
+                      {p.id === 'custom' ? 'CUSTOM' : p.name.split(' ')[0].toUpperCase()}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
-          <div className="setting-group">
-            <label className="setting-label">API Keys</label>
-            <div className="input-field">
-              <span className="field-prefix">OpenAI</span>
-              <input 
-                type="password" 
-                placeholder="sk-..." 
-                value={openaiKey}
-                onChange={(e) => setOpenaiKey(e.target.value)}
-              />
-            </div>
-            <div className="input-field">
-              <span className="field-prefix">Anthropic</span>
-              <input 
-                type="password" 
-                placeholder="sk-ant-..." 
-                value={anthropicKey}
-                onChange={(e) => setAnthropicKey(e.target.value)}
-              />
-            </div>
-            <div className="input-field">
-              <span className="field-prefix">Gemini</span>
-              <input 
-                type="password" 
-                placeholder="AIza..." 
-                value={geminiKey}
-                onChange={(e) => setGeminiKey(e.target.value)}
-              />
-            </div>
-            <p className="setting-hint">Credentials are saved locally in your User profile folder (sidecar-data.json).</p>
-          </div>
+              {providerMeta.requiresBaseUrl && (
+                <div className="setting-group">
+                  <label className="setting-label">Base URL</label>
+                  <div className="input-field">
+                    <input
+                      type="text"
+                      spellCheck="false"
+                      placeholder="http://localhost:11434/v1"
+                      value={draft.llm.baseUrl}
+                      onChange={(e) => patchLlm({ baseUrl: e.target.value })}
+                    />
+                  </div>
+                  <p className="setting-hint">
+                    Any OpenAI-compatible endpoint: Ollama, LM Studio, vLLM, OpenRouter.
+                  </p>
+                </div>
+              )}
 
-          <div className="setting-group">
-            <label className="setting-label">Custom Models ({provider.toUpperCase()})</label>
-            <div className="input-field">
-              <span className="field-prefix">Standard</span>
-              <input 
-                type="text" 
-                value={modelStandard}
-                onChange={(e) => setModelStandard(e.target.value)}
-              />
+              <div className="setting-group">
+                <ModelPicker
+                  label="Standard model"
+                  value={activeModels.standard}
+                  models={activeList.models}
+                  loading={activeList.loading}
+                  error={activeList.error}
+                  vision={visionOf(activeModels.standard)}
+                  visionOverride={draft.llm.visionOverrides[activeModels.standard]}
+                  onToggleVision={(v) => setVisionOverride(activeModels.standard, v)}
+                  onChange={(v) => patchModels({ standard: v })}
+                  onRefresh={() => fetchModels(draft.llm.provider, true)}
+                />
+                <ModelPicker
+                  label="Advanced model (Smart Mode)"
+                  value={activeModels.advanced}
+                  models={activeList.models}
+                  loading={activeList.loading}
+                  vision={visionOf(activeModels.advanced)}
+                  visionOverride={draft.llm.visionOverrides[activeModels.advanced]}
+                  onToggleVision={(v) => setVisionOverride(activeModels.advanced, v)}
+                  onChange={(v) => patchModels({ advanced: v })}
+                />
+                <ModelPicker
+                  label="Vision model (optional)"
+                  hint="Used when the chat model cannot accept screenshots. Leave blank to drop images instead."
+                  placeholder="leave blank to disable"
+                  value={activeModels.vision}
+                  models={activeList.models.filter((m) => m.vision)}
+                  loading={activeList.loading}
+                  vision={visionOf(activeModels.vision)}
+                  onChange={(v) => patchModels({ vision: v })}
+                />
+              </div>
+
+              <div className="setting-group">
+                <label className="setting-label">API keys</label>
+                {providers.map((p) => (
+                  <KeyField
+                    key={p.id}
+                    label={p.name.split(' ')[0]}
+                    placeholder={KEY_PLACEHOLDERS[p.id] || ''}
+                    stored={!!(view.keyPresence.llm || {})[p.id]}
+                    value={keyDraftValue('llm', p.id)}
+                    onChange={(v) => setKeyDraft('llm', p.id, v)}
+                    onClear={() => setKeyDraft('llm', p.id, null)}
+                  />
+                ))}
+                <p className={view.encryptionAvailable ? 'setting-hint' : 'setting-warning'}>
+                  {view.encryptionAvailable
+                    ? 'Keys are encrypted with your OS keychain and never leave this machine.'
+                    : 'OS encryption is unavailable here — keys are stored as plaintext in your user data folder.'}
+                </p>
+              </div>
+            </>
+          )}
+
+          {tab === 'speech' && (
+            <>
+              <div className="setting-group">
+                <label className="setting-label">Transcription provider</label>
+                <div className="provider-tabs">
+                  {sttProviders.map((p) => (
+                    <button
+                      key={p.id}
+                      className={`provider-tab-btn ${draft.stt.provider === p.id ? 'active' : ''}`}
+                      onClick={() => patchStt({ provider: p.id })}
+                    >
+                      {p.id === 'custom' ? 'CUSTOM' : p.name.split(' ')[0].toUpperCase()}
+                    </button>
+                  ))}
+                </div>
+                <p className="setting-hint">
+                  Independent of the chat provider — chat with Anthropic while transcribing with OpenAI.
+                </p>
+              </div>
+
+              <div className="setting-group">
+                <label className="setting-label">Transcription model</label>
+                <div className="input-field">
+                  <input
+                    type="text"
+                    spellCheck="false"
+                    value={draft.stt.models[draft.stt.provider] || ''}
+                    onChange={(e) => patchStt({
+                      models: { ...draft.stt.models, [draft.stt.provider]: e.target.value }
+                    })}
+                  />
+                </div>
+              </div>
+
+              {draft.stt.provider === 'custom' && (
+                <div className="setting-group">
+                  <label className="setting-label">Transcription base URL</label>
+                  <div className="input-field">
+                    <input
+                      type="text"
+                      spellCheck="false"
+                      placeholder="http://localhost:8080/v1"
+                      value={draft.stt.baseUrl}
+                      onChange={(e) => patchStt({ baseUrl: e.target.value })}
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="setting-group">
+                <label className="setting-label">Spoken language</label>
+                <div className="input-field">
+                  <select
+                    className="setting-select"
+                    value={draft.stt.language}
+                    onChange={(e) => patchStt({ language: e.target.value })}
+                  >
+                    {LANGUAGES.map(([code, label]) => (
+                      <option key={code} value={code}>{label}</option>
+                    ))}
+                  </select>
+                </div>
+                <p className="setting-hint">
+                  Auto-detect is the safest choice for mixed-language speech.
+                </p>
+              </div>
+
+              <div className="setting-group">
+                <label className="setting-label">Transcription API keys</label>
+                {sttProviders.map((p) => (
+                  <KeyField
+                    key={p.id}
+                    label={p.name.split(' ')[0]}
+                    placeholder={KEY_PLACEHOLDERS[p.id] || ''}
+                    stored={!!(view.keyPresence.stt || {})[p.id]}
+                    value={keyDraftValue('stt', p.id)}
+                    onChange={(v) => setKeyDraft('stt', p.id, v)}
+                    onClear={() => setKeyDraft('stt', p.id, null)}
+                  />
+                ))}
+                <p className="setting-hint">
+                  Kept separate from the chat keys so you can use different accounts.
+                </p>
+              </div>
+            </>
+          )}
+
+          {tab === 'limits' && (
+            <div className="setting-group">
+              <label className="setting-label">Request budget per provider</label>
+              <p className="setting-hint">
+                Free tiers cap requests per minute and per day. Sidecar queues rather than fails,
+                and always runs your hotkey before background work.
+              </p>
+              {providers.map((p) => {
+                const limits = draft.rateLimits[p.id] || { rpm: 60, rpd: 1000 };
+                return (
+                  <div className="limit-row" key={p.id}>
+                    <span className="limit-name">{p.name}</span>
+                    <label className="limit-input">
+                      <span>per min</span>
+                      <input
+                        type="number"
+                        min="1"
+                        value={limits.rpm}
+                        onChange={(e) => setDraft((d) => ({
+                          ...d,
+                          rateLimits: {
+                            ...d.rateLimits,
+                            [p.id]: { ...limits, rpm: Math.max(1, Number(e.target.value) || 1) }
+                          }
+                        }))}
+                      />
+                    </label>
+                    <label className="limit-input">
+                      <span>per day</span>
+                      <input
+                        type="number"
+                        min="1"
+                        value={limits.rpd}
+                        onChange={(e) => setDraft((d) => ({
+                          ...d,
+                          rateLimits: {
+                            ...d.rateLimits,
+                            [p.id]: { ...limits, rpd: Math.max(1, Number(e.target.value) || 1) }
+                          }
+                        }))}
+                      />
+                    </label>
+                  </div>
+                );
+              })}
             </div>
-            <div className="input-field">
-              <span className="field-prefix">Advanced</span>
-              <input 
-                type="text" 
-                value={modelAdvanced}
-                onChange={(e) => setModelAdvanced(e.target.value)}
-              />
-            </div>
-          </div>
+          )}
 
           {saveStatus && <div className="save-status-msg">{saveStatus}</div>}
         </div>

@@ -863,3 +863,211 @@ html, body {
   from { transform: scale(0.95); opacity: 0; }
   to { transform: scale(1); opacity: 1; }
 }
+
+/* ============================================================
+   Phase 0 — provider settings, capability badges, request budget
+   ============================================================ */
+
+:root {
+  --accent-warn: #e0a458;
+  --accent-danger: #e06c75;
+  --border-warn: rgba(224, 164, 88, 0.35);
+  --background-warn: rgba(224, 164, 88, 0.1);
+}
+
+/* Settings tab strip */
+.modal-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.modal-tab-btn {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: color 0.2s ease, border-color 0.2s ease;
+}
+
+.modal-tab-btn:hover {
+  color: var(--text-primary);
+}
+
+.modal-tab-btn.active {
+  color: var(--accent-primary);
+  border-bottom-color: var(--accent-primary);
+}
+
+/* Model picker */
+.model-picker {
+  margin-bottom: 14px;
+}
+
+.model-picker-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.link-btn {
+  background: transparent;
+  border: none;
+  color: var(--accent-primary);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  transition: color 0.2s ease, background 0.2s ease;
+}
+
+.link-btn:hover:not(:disabled) {
+  background: var(--background-inset-hover);
+  color: var(--accent-primary-hover);
+}
+
+.link-btn:disabled {
+  color: var(--text-muted);
+  cursor: default;
+}
+
+.link-btn.danger {
+  color: var(--accent-danger);
+}
+
+.capability-badge {
+  flex-shrink: 0;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--border-light);
+  color: var(--text-muted);
+}
+
+.capability-badge.is-vision {
+  color: var(--accent-primary);
+  border-color: var(--border-accent);
+  background: rgba(0, 180, 137, 0.08);
+}
+
+.capability-badge.is-text {
+  color: var(--accent-warn);
+  border-color: var(--border-warn);
+  background: var(--background-warn);
+}
+
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.checkbox-row input {
+  accent-color: var(--accent-primary);
+  cursor: pointer;
+}
+
+.setting-warning {
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--accent-warn);
+  margin-top: 6px;
+}
+
+.setting-select {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: var(--font-family);
+  padding: 8px 0;
+  cursor: pointer;
+}
+
+.setting-select option {
+  background: var(--background-modal);
+  color: var(--text-primary);
+}
+
+.key-field + .key-field {
+  margin-top: -2px;
+}
+
+/* Rate-limit rows */
+.limit-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.limit-row:last-child {
+  border-bottom: none;
+}
+
+.limit-name {
+  flex: 1;
+  font-size: 12.5px;
+  color: var(--text-primary);
+}
+
+.limit-input {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.limit-input input {
+  width: 68px;
+  background: var(--background-inset);
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 12px;
+  padding: 5px 7px;
+  outline: none;
+}
+
+.limit-input input:focus {
+  border-color: var(--border-accent);
+}
+
+/* Request budget pill in the composer */
+.budget-pill {
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--border-light);
+  background: var(--background-inset);
+  white-space: nowrap;
+}
+
+.budget-pill.is-low {
+  color: var(--accent-warn);
+  border-color: var(--border-warn);
+  background: var(--background-warn);
+}
+
+.budget-pill.is-empty {
+  color: var(--accent-danger);
+  border-color: rgba(224, 108, 117, 0.35);
+  background: rgba(224, 108, 117, 0.1);
+}
