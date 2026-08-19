@@ -50,6 +50,8 @@ contextBridge.exposeInMainWorld('sidecar', {
   runMode: (payload) => ipcRenderer.send('sidecar:run-mode', payload),
   toggleListening: () => ipcRenderer.invoke('sidecar:toggle-listening'),
   sendAudioChunk: (source, arrayBuffer) => ipcRenderer.send('sidecar:audio-chunk', { source, arrayBuffer }),
+  sendVadState: (source, state) => ipcRenderer.send('sidecar:vad', { source, state }),
+  listSttEngines: () => ipcRenderer.invoke('sidecar:stt:engines'),
   setMouseIgnore: (ignore) => ipcRenderer.send('sidecar:mouse-ignore', ignore),
   openUrl: (url) => ipcRenderer.send('sidecar:open-url', url),
   log: (msg) => ipcRenderer.send('sidecar:log', msg),

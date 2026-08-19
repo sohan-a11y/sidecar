@@ -79,7 +79,7 @@ app.whenReady().then(() => {
 
 app.on('will-quit', () => {
   ShortcutsManager.unregisterAll();
-  IpcRouter.stopTranscriptionLoop();
+  IpcRouter.shutdown();
 });
 
 app.on('window-all-closed', () => {

@@ -4,6 +4,7 @@ import PanelBody from './components/PanelBody';
 import Composer from './components/Composer';
 import SettingsModal from './components/SettingsModal';
 import OnboardingGuide from './components/OnboardingGuide';
+import { createSegmenter } from './lib/vadSegmenter';
 
 // Audio Context instances stored outside state to prevent re-renders
 let micStream = null;
@@ -15,6 +16,27 @@ let sysStream = null;
 let sysNode = null;
 let sysProcessor = null;
 let sysCtx = null;
+
+// One VAD per channel: the two speakers start and stop independently.
+const segmenters = { user: null, system: null };
+
+/**
+ * Convert a Float32 frame to Int16 PCM, ship it, and let the VAD decide where the
+ * utterance ends. Replaces the fixed 3.5 s window, which cut mid-word.
+ */
+function pumpFrame(sidecar, channel, input, sampleRate) {
+  const output = new Int16Array(input.length);
+  for (let i = 0; i < input.length; i += 1) {
+    const s = Math.max(-1, Math.min(1, input[i]));
+    output[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+  }
+  sidecar.sendAudioChunk(channel, output.buffer);
+
+  const segmenter = segmenters[channel];
+  if (!segmenter) return;
+  const boundary = segmenter.push(input, (input.length / sampleRate) * 1000);
+  if (boundary) sidecar.sendVadState(channel, boundary);
+}
 
 export default function App() {
   const sidecar = window.sidecar; // exposed in preload
@@ -218,26 +240,9 @@ export default function App() {
       micProcessor.connect(micGain);
       micGain.connect(audioCtx.destination);
 
-      let micProcessCount = 0;
+      segmenters.user = createSegmenter();
       micProcessor.onaudioprocess = (e) => {
-        const input = e.inputBuffer.getChannelData(0);
-        let sum = 0;
-        for (let i = 0; i < input.length; i++) {
-          sum += input[i] * input[i];
-        }
-        const rms = Math.sqrt(sum / input.length);
-        
-        micProcessCount++;
-        if (micProcessCount % 40 === 0) {
-          console.log(`[App] onaudioprocess fired for mic channel. RMS volume = ${rms.toFixed(5)}`);
-        }
-
-        const output = new Int16Array(input.length);
-        for (let i = 0; i < input.length; i++) {
-          const s = Math.max(-1, Math.min(1, input[i]));
-          output[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
-        }
-        sidecar.sendAudioChunk('user', output.buffer);
+        pumpFrame(sidecar, 'user', e.inputBuffer.getChannelData(0), audioCtx.sampleRate);
       };
 
       console.log('[App] Attempting getDisplayMedia for loopback audio...');
@@ -272,26 +277,9 @@ export default function App() {
       sysProcessor.connect(sysGain);
       sysGain.connect(sysCtx.destination);
 
-      let processCount = 0;
+      segmenters.system = createSegmenter();
       sysProcessor.onaudioprocess = (e) => {
-        const input = e.inputBuffer.getChannelData(0);
-        let sum = 0;
-        for (let i = 0; i < input.length; i++) {
-          sum += input[i] * input[i];
-        }
-        const rms = Math.sqrt(sum / input.length);
-        
-        processCount++;
-        if (processCount % 40 === 0) {
-          console.log(`[App] onaudioprocess fired for system channel. RMS volume = ${rms.toFixed(5)}`);
-        }
-
-        const output = new Int16Array(input.length);
-        for (let i = 0; i < input.length; i++) {
-          const s = Math.max(-1, Math.min(1, input[i]));
-          output[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
-        }
-        sidecar.sendAudioChunk('system', output.buffer);
+        pumpFrame(sidecar, 'system', e.inputBuffer.getChannelData(0), sysCtx.sampleRate);
       };
 
       sidecar.log('Audio capture initialized successfully.');
@@ -306,6 +294,8 @@ export default function App() {
   };
 
   const stopAudioCapture = () => {
+    segmenters.user = null;
+    segmenters.system = null;
     // Shutdown Mic processing
     if (micProcessor) { micProcessor.disconnect(); micProcessor.onaudioprocess = null; micProcessor = null; }
     if (micNode) { micNode.disconnect(); micNode = null; }
