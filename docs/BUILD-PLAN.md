@@ -7,7 +7,7 @@ Scope note: no backend, no accounts, no billing, no telemetry. BYO-key, local-on
 
 - [x] Phase 0 — Provider abstraction, TokenRouter, STT/LLM split, rate limiting
 - [x] Phase 1 — Context layer (resume, JD, profile, story bank)
-- [ ] Phase 2 — Live transcript UI + sessions
+- [x] Phase 2 — Live transcript UI + sessions
 - [ ] Phase 3 — Streaming ASR + multilingual
 - [ ] Phase 4 — Question detection + auto-answer
 - [ ] Phase 5 — Answer UX + follow-up threading
@@ -238,6 +238,24 @@ regenerated every ~20 turns. Enforce a hard token ceiling and report the estimat
 
 **Contract:** `SessionManager.current()` gives the active session; `getPromptWindow()` returns a
 bounded transcript slice plus summary. Nothing reads a raw unbounded transcript array again.
+
+**Landed** (`phase-2-transcript`):
+
+- `SessionManager.js` owns the transcript; `IpcRouter.transcript` is gone. Sessions persist to
+  `sessions/<iso>-<slug>.json` with context snapshot, transcript, and every answer tagged with the
+  mode, provider and model that produced it. Autosave is debounced per turn.
+- Unclean shutdown recovery: a session file with no `endedAt` is picked back up on next launch.
+- `TranscriptPane`: speaker labels, relative timestamps, search, per-turn and whole-transcript copy,
+  autoscroll with a jump-to-latest pill, and greyed italic interim turns ready for Phase 3.
+- Panel splits into two columns at >=860px and falls back to Answers/Transcript tabs below that.
+- Sessions tab: list, rename, delete, delete-all, export to Markdown/TXT/JSON via a save dialog,
+  plus retention (forever / N days / never persist).
+- Rolling window of N turns (default 30) with a hard token ceiling, and a running summary of older
+  turns regenerated every 20 turns at 'auto' priority so it cannot delay a hotkey.
+
+**Deviation:** a session starts implicitly when capture is switched on, rather than requiring a
+separate Start press. Ending is explicit (header button). Requiring an explicit start meant a user
+who forgot it would record nothing at all.
 
 ---
 

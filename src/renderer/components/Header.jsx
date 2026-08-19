@@ -1,6 +1,6 @@
 import React from 'react';
 
-export default function Header({ isListening, onToggleListening, isCollapsed, onToggleCollapse, onOpenOnboarding, statusMessage }) {
+export default function Header({ isListening, onToggleListening, isCollapsed, onToggleCollapse, onOpenOnboarding, statusMessage, session, onEndSession }) {
   
   const logoSvg = (
     <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -27,6 +27,19 @@ export default function Header({ isListening, onToggleListening, isCollapsed, on
           <span className="arrow-icon"></span>
           <span>{isCollapsed ? 'Show' : 'Hide'}</span>
         </button>
+        {session && session.active && (
+          <>
+            <div className="tb-divider"></div>
+            <button
+              className="tb-session-btn"
+              title={`${session.turnCount} turns · ~${session.estimatedTokens} prompt tokens${session.hasSummary ? ' · summarised' : ''}`}
+              onClick={onEndSession}
+            >
+              <span className="session-dot"></span>
+              <span>End session</span>
+            </button>
+          </>
+        )}
         <div className="tb-divider"></div>
         <button 
           className={`tb-listen-btn ${isListening ? 'active' : ''}`}

@@ -33,6 +33,8 @@ export default function App() {
   const [usage, setUsage] = useState({});
   const [llmProvider, setLlmProvider] = useState('openai');
   const [hasProfile, setHasProfile] = useState(false);
+  const [turns, setTurns] = useState([]);
+  const [session, setSession] = useState({ active: false, turnCount: 0, estimatedTokens: 0 });
 
   useEffect(() => {
     bootApp();
@@ -52,6 +54,8 @@ export default function App() {
       setUsage(snapshot || {});
       const context = await sidecar.context.get();
       setHasProfile(!!(context && context.hasProfile));
+      setSession(await sidecar.session.state());
+      setTurns(await sidecar.session.transcript());
       if (!data.onboardingComplete) {
         setIsOnboardingOpen(true);
       }
@@ -102,9 +106,23 @@ export default function App() {
       setTimeout(() => setStatusMessage(''), 10000);
     });
 
-    // 3. New transcript chunk turn added
+    // 3. New transcript turn — interim turns replace the open one on the same channel
     sidecar.on('transcript', (turn) => {
-      sidecar.log(`[Transcript received] ${turn.sender}: ${turn.text}`);
+      setTurns((prev) => {
+        const idx = prev.findIndex((t) => t.id === turn.id);
+        if (idx >= 0) {
+          const next = [...prev];
+          next[idx] = turn;
+          return next;
+        }
+        return [...prev, turn];
+      });
+    });
+
+    // 3a. Session lifecycle
+    sidecar.on('session:state', (state) => {
+      setSession(state);
+      if (!state.active) setTurns([]);
     });
 
     // 3b. Request budget changed
@@ -342,6 +360,8 @@ export default function App() {
   return (
     <div id="app-wrapper">
       <Header 
+        session={session}
+        onEndSession={async () => setSession(await sidecar.session.end())}
         isListening={isListening} 
         onToggleListening={handleToggleListening}
         isCollapsed={isCollapsed}
@@ -353,6 +373,8 @@ export default function App() {
       {!isCollapsed && (
         <div className="panel-glass">
           <PanelBody 
+            turns={turns}
+            onCopy={(text) => navigator.clipboard.writeText(text)}
             messages={messages} 
             activeMode={activeMode}
             onSelectMode={(mode) => {
