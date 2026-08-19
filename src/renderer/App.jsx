@@ -177,6 +177,12 @@ export default function App() {
     });
 
     // 4. LLM Streaming started
+    // Overlay presentation is applied as CSS variables on the root element.
+    sidecar.on('overlay:style', ({ fontScale, density }) => {
+      document.documentElement.style.setProperty('--font-scale', fontScale || 1);
+      document.documentElement.dataset.density = density || 'comfortable';
+    });
+
     sidecar.on('llm:queue', ({ queued }) => setIsQueued(!!queued));
 
     sidecar.on('llm:replace-last', () => {

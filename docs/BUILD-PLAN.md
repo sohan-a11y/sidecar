@@ -11,7 +11,7 @@ Scope note: no backend, no accounts, no billing, no telemetry. BYO-key, local-on
 - [x] Phase 3 — Streaming ASR + multilingual
 - [x] Phase 4 — Question detection + auto-answer
 - [x] Phase 5 — Answer UX + follow-up threading
-- [ ] Phase 6 — Capture + overlay controls
+- [x] Phase 6 — Capture + overlay controls
 - [ ] Phase 7 — Open-source hygiene (can run any time after Phase 0)
 
 ---
@@ -433,6 +433,26 @@ interviews, at zero bundle cost. Swappable if real usage needs more.
 - Fully remappable shortcuts with conflict detection, replacing the hardcoded registrations.
 
 **Contract:** capture target and overlay presentation are user-configurable and persisted.
+
+**Landed** (`phase-6-capture-overlay`):
+
+- Monitor/window picker with thumbnails, remembered in settings. `sources[0]` is now only the
+  fallback.
+- Region select on a transparent full-screen layer (`region.html`, a second Vite entry). The crop is
+  stored as fractions of the source, so it survives a resolution change.
+- Average-hash change detection: an unchanged screen no longer burns a request. Manual presses
+  always force a fresh frame; auto-answers are the ones that may skip.
+- Frames are requested at the send size (default 1280 px wide, configurable) instead of grabbing
+  1920x1080 and shipping it whole.
+- Overlay opacity, text size and comfortable/compact density, applied live. Window position and
+  size persist across restarts, with per-display placement presets and off-screen recovery.
+- **Hide/show hotkey** (`Cmd/Ctrl+Shift+H`) that preserves capture and the session — previously the
+  only way to get the panel off screen was to quit.
+- All five shortcuts are remappable by pressing the combination, with conflict detection for both
+  double-bound actions and shortcuts another application already owns.
+
+**Bug found while testing:** `ShortcutsManager.registerAll()` computed conflicts but returned
+nothing, so `index.js` could never report them.
 
 ---
 

@@ -8,6 +8,13 @@ export default defineConfig({
   build: {
     outDir: 'out',
     emptyOutDir: true,
+    rollupOptions: {
+      // Second entry: the transparent full-screen layer for picking a capture region.
+      input: {
+        main: path.resolve(__dirname, 'index.html'),
+        region: path.resolve(__dirname, 'region.html'),
+      },
+    },
   },
   resolve: {
     alias: {

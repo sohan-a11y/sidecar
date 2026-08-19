@@ -1689,3 +1689,106 @@ html, body {
 .tok-string { color: #c3e88d; }
 .tok-comment { color: rgba(255, 255, 255, 0.35); font-style: italic; }
 .tok-number { color: #f78c6c; }
+
+/* ============================================================
+   Phase 6 — capture picker, overlay density, shortcut chips
+   ============================================================ */
+
+:root { --font-scale: 1; }
+
+/* Text size and density are driven from settings, not hardcoded per component. */
+.message-bubble,
+.turn-text,
+.composer-textarea {
+  font-size: calc(12.5px * var(--font-scale));
+}
+
+:root[data-density='compact'] .turn-row { padding: 4px 0 5px; }
+:root[data-density='compact'] .message-bubble-wrapper { margin-bottom: 6px; }
+:root[data-density='compact'] .messages-viewport,
+:root[data-density='compact'] .transcript-viewport { padding: 6px 10px; }
+
+.source-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 8px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.source-card {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 6px;
+  background: var(--background-inset);
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.source-card:hover { background: var(--background-inset-hover); border-color: var(--border-hover); }
+
+.source-card.active {
+  border-color: var(--accent-primary);
+  background: rgba(0, 180, 137, 0.08);
+}
+
+.source-thumb {
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.source-thumb-empty { border: 1px dashed var(--border-light); }
+
+.source-name {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.slider {
+  flex: 1;
+  accent-color: var(--accent-primary);
+  cursor: pointer;
+}
+
+.limit-value {
+  font-size: 11px;
+  color: var(--text-muted);
+  min-width: 38px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.shortcut-chip {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-primary);
+  background: var(--background-inset);
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+  padding: 4px 9px;
+  cursor: pointer;
+  transition: border-color 0.2s ease, color 0.2s ease;
+}
+
+.shortcut-chip:hover { border-color: var(--border-hover); }
+
+.shortcut-chip.recording {
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+  background: rgba(0, 180, 137, 0.1);
+}
+
+.shortcut-chip.conflict {
+  border-color: rgba(224, 108, 117, 0.5);
+  color: var(--accent-danger);
+}
