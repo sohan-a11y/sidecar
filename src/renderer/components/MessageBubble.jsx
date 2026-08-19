@@ -1,4 +1,5 @@
 import React from 'react';
+import CodeBlock from './CodeBlock';
 
 export default function MessageBubble({ message }) {
   // Auto-answer explains itself: what it heard, and how sure it was.
@@ -24,9 +25,7 @@ export default function MessageBubble({ message }) {
     const flushCodeBlock = (key) => {
       if (codeContent.length > 0) {
         elements.push(
-          <pre key={`code-${key}`} className="bubble-code-block">
-            <code>{codeContent.join('\n')}</code>
-          </pre>
+          <CodeBlock key={`code-${key}`} code={codeContent.join('\n')} />
         );
         codeContent = [];
       }
@@ -141,6 +140,16 @@ export default function MessageBubble({ message }) {
         {parseMarkdown(text)}
         {isStreaming && <span className="bubble-caret"></span>}
       </div>
+      {!isStreaming && text && (
+        <button
+          type="button"
+          className="bubble-copy link-btn"
+          title="Copy this answer"
+          onClick={() => navigator.clipboard.writeText(text)}
+        >
+          Copy
+        </button>
+      )}
     </div>
   );
 }

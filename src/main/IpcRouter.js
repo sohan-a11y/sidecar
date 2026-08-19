@@ -25,6 +25,11 @@ class IpcRouter {
     this.sttErrorShown = false;
     this.activeRequestIsAuto = false;
     this.lastSystemTurnAt = 0;
+    // Follow-ups need the prior turns; before Phase 5 every answer was a cold one-shot.
+    this.thread = [];
+    // Queue depth of 1 with visible state, rather than silently dropping the request.
+    this.queued = null;
+    this.lastRequest = null;
   }
 
   initialize() {
@@ -147,6 +152,30 @@ class IpcRouter {
       return SettingsManager.get().autoAnswer;
     });
     ipcMain.handle('sidecar:auto-answer:get', () => SettingsManager.get().autoAnswer);
+
+    // 12. Answer controls
+    ipcMain.on('sidecar:llm:cancel', () => {
+      if (this.activeRequest) this.activeRequest.abort();
+      this.queued = null;
+      WindowManager.send('llm:queue', { queued: false });
+    });
+
+    ipcMain.on('sidecar:llm:regenerate', (_event, { preset } = {}) => {
+      if (!this.lastRequest) return;
+      const { mode, userText } = this.lastRequest;
+      // Drop the previous answer from the thread so the retry replaces it.
+      if (this.thread.length && this.thread[this.thread.length - 1].role === 'assistant') {
+        this.thread.pop();
+        if (this.thread.length && this.thread[this.thread.length - 1].role === 'user') this.thread.pop();
+      }
+      WindowManager.send('llm:replace-last', {});
+      this.executeMode(mode, userText, { preset });
+    });
+
+    ipcMain.on('sidecar:thread:new', () => {
+      this.thread = [];
+      WindowManager.send('thread:cleared', {});
+    });
 
     // 9. Rate-limit budget snapshot
     ipcMain.handle('sidecar:usage:get', () => RateLimiter.snapshot());
@@ -414,7 +443,7 @@ class IpcRouter {
     }
   }
 
-  async executeMode(mode, userText, { priority = 'user', auto = false } = {}) {
+  async executeMode(mode, userText, { priority = 'user', auto = false, preset } = {}) {
     if (!auto) {
       // A manual press outranks anything auto-answer was about to do, including
       // a request already in flight.
@@ -424,9 +453,16 @@ class IpcRouter {
         this.isLlmBusy = false;
       }
     }
-    if (this.isLlmBusy) return;
     const modeConfig = LlmService.modes[mode];
     if (!modeConfig) return;
+
+    if (this.isLlmBusy) {
+      // One slot, and the user can see it is taken.
+      if (auto) return;
+      this.queued = { mode, userText, preset };
+      WindowManager.send('llm:queue', { queued: true, mode });
+      return;
+    }
 
     this.isLlmBusy = true;
     const controller = new AbortController();
@@ -450,12 +486,16 @@ class IpcRouter {
       }
 
       const window = SessionManager.getPromptWindow();
+      const historyDepth = (SettingsManager.get().answers || {}).historyDepth || 8;
       const prompt = PromptBuilder.build(mode, {
         transcript: window.turns,
         transcriptSummary: window.summary,
         userText,
-        images
+        images,
+        history: this.thread.slice(-historyDepth),
+        preset
       });
+      this.lastRequest = { mode, userText, preset };
 
       let answerText = '';
       await LlmService.stream(
@@ -472,6 +512,10 @@ class IpcRouter {
           WindowManager.send('llm:token', { text: token });
         }
       );
+
+      // Keep the exchange so the next turn can be a follow-up.
+      const lastUserMessage = prompt.messages[prompt.messages.length - 1];
+      this.thread.push(lastUserMessage, { role: 'assistant', content: answerText });
 
       const eff = SettingsManager.effective();
       SessionManager.addAnswer({
@@ -493,6 +537,13 @@ class IpcRouter {
       this.isLlmBusy = false;
       this.activeRequest = null;
       this.activeRequestIsAuto = false;
+
+      if (this.queued) {
+        const next = this.queued;
+        this.queued = null;
+        WindowManager.send('llm:queue', { queued: false });
+        this.executeMode(next.mode, next.userText, { preset: next.preset });
+      }
     }
   }
 

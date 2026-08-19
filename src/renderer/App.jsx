@@ -58,6 +58,8 @@ export default function App() {
   const [turns, setTurns] = useState([]);
   const [session, setSession] = useState({ active: false, turnCount: 0, estimatedTokens: 0 });
   const [autoAnswer, setAutoAnswer] = useState(false);
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [isQueued, setIsQueued] = useState(false);
 
   useEffect(() => {
     bootApp();
@@ -175,7 +177,21 @@ export default function App() {
     });
 
     // 4. LLM Streaming started
+    sidecar.on('llm:queue', ({ queued }) => setIsQueued(!!queued));
+
+    sidecar.on('llm:replace-last', () => {
+      setMessages((prev) => {
+        const next = [...prev];
+        while (next.length && next[next.length - 1].role !== 'user') next.pop();
+        if (next.length) next.pop();
+        return next;
+      });
+    });
+
+    sidecar.on('thread:cleared', () => setMessages([]));
+
     sidecar.on('llm:start', ({ userBubble, small }) => {
+      setIsStreaming(true);
       setMessages(prev => {
         const next = [...prev];
         if (userBubble) {
@@ -201,6 +217,7 @@ export default function App() {
 
     // 6. LLM Streaming complete
     sidecar.on('llm:done', () => {
+      setIsStreaming(false);
       setMessages(prev => {
         if (prev.length === 0) return prev;
         const next = [...prev];
@@ -214,6 +231,7 @@ export default function App() {
 
     // 7. LLM Streaming failed
     sidecar.on('llm:error', ({ message }) => {
+      setIsStreaming(false);
       setMessages(prev => {
         if (prev.length === 0) return prev;
         const next = [...prev];
@@ -391,6 +409,12 @@ export default function App() {
             isListening={isListening}
           />
           <Composer 
+            isStreaming={isStreaming}
+            isQueued={isQueued}
+            onStop={() => sidecar.cancelAnswer()}
+            onRegenerate={(preset) => sidecar.regenerate(preset)}
+            onNewThread={() => sidecar.newThread()}
+            canRegenerate={messages.some((m) => m.role === 'assistant')}
             userText={userText}
             setUserText={setUserText}
             usage={usage[llmProvider]}
