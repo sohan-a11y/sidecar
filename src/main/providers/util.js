@@ -116,6 +116,33 @@ function attachImagesOpenAi(messages, images) {
   return out;
 }
 
+/**
+ * A system prompt is either a plain string or an ordered list of blocks
+ * ({ text, cacheable }). Providers without prompt caching just get the concatenation.
+ */
+function systemToText(system) {
+  if (!system) return '';
+  if (typeof system === 'string') return system;
+  return system
+    .map((block) => (typeof block === 'string' ? block : block && block.text))
+    .filter(Boolean)
+    .join('\n\n');
+}
+
+/** Anthropic keeps the block structure so cacheable prefixes can be marked. */
+function systemToAnthropicBlocks(system) {
+  if (!system) return undefined;
+  if (typeof system === 'string') return system;
+  const blocks = system
+    .filter((block) => block && block.text)
+    .map((block) => ({
+      type: 'text',
+      text: block.text,
+      ...(block.cacheable ? { cache_control: { type: 'ephemeral' } } : {})
+    }));
+  return blocks.length > 0 ? blocks : undefined;
+}
+
 /** Throw a tagged abort error so callers can tell cancellation from failure. */
 function abortError() {
   const err = new Error('Request cancelled');
@@ -129,6 +156,8 @@ function isAbort(err) {
 }
 
 module.exports = {
+  systemToText,
+  systemToAnthropicBlocks,
   parseDataUrl,
   withTempWav,
   guessVision,

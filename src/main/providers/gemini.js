@@ -1,5 +1,5 @@
 const { GoogleGenAI } = require('@google/genai');
-const { parseDataUrl, withTempWav, abortError } = require('./util');
+const { parseDataUrl, withTempWav, abortError, systemToText } = require('./util');
 
 const MODELS_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
 const SEED_MODELS = ['gemini-2.5-flash-lite', 'gemini-2.5-flash', 'gemini-2.5-pro'];
@@ -73,10 +73,11 @@ const adapter = {
         if (parsed) contents.push({ inlineData: { mimeType: parsed.mediaType, data: parsed.base64 } });
       }
 
+      const systemText = systemToText(system);
       const responseStream = await ai.models.generateContentStream({
         model,
         contents,
-        ...(system ? { config: { systemInstruction: system } } : {})
+        ...(systemText ? { config: { systemInstruction: systemText } } : {})
       });
 
       for await (const chunk of responseStream) {

@@ -25,7 +25,11 @@
       "src/main/**/*",
       "src/preload/**/*",
       "out/**/*",
-      "package.json"
+      "package.json",
+      "!node_modules/pdf-parse/test/**",
+      "!node_modules/pdf-parse/lib/pdf.js/v1.9.426/**",
+      "!node_modules/pdf-parse/lib/pdf.js/v1.10.88/**",
+      "!node_modules/pdf-parse/lib/pdf.js/v2.0.550/**"
     ],
     "mac": {
       "target": [
@@ -61,7 +65,9 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.32.1",
     "@google/genai": "^0.3.0",
+    "mammoth": "^1.12.1",
     "openai": "^4.73.0",
+    "pdf-parse": "^1.1.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },

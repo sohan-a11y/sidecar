@@ -6,7 +6,7 @@ assume) — treat the Contract as the acceptance criteria.
 Scope note: no backend, no accounts, no billing, no telemetry. BYO-key, local-only, MIT.
 
 - [x] Phase 0 — Provider abstraction, TokenRouter, STT/LLM split, rate limiting
-- [ ] Phase 1 — Context layer (resume, JD, profile, story bank)
+- [x] Phase 1 — Context layer (resume, JD, profile, story bank)
 - [ ] Phase 2 — Live transcript UI + sessions
 - [ ] Phase 3 — Streaming ASR + multilingual
 - [ ] Phase 4 — Question detection + auto-answer
@@ -185,6 +185,26 @@ tell at a glance whether answers are personalised.
 
 **Contract:** `PromptBuilder.build(mode, { transcript, userText, images })` returns a fully
 composed, cache-friendly request. Nothing downstream assembles prompts by hand.
+
+**Landed** (`phase-1-context`):
+
+- `ContextStore.js` -> `sidecar-context.json`: PDF/DOCX/TXT/MD ingestion via drag-drop and file
+  picker, 10 MB / 50 page caps, profile normalisation that never throws on model output.
+- `ProfileBuilder.js`: one distillation call, defensive JSON parsing (fenced, padded, trailing
+  commas), refuses to overwrite a profile with garbage.
+- `PromptBuilder.js`: system blocks ordered stable-first (mode -> profile -> session), stories and
+  transcript in the user turn. Anthropic gets `cache_control` on blocks over 1500 chars; other
+  providers get the concatenation. Story retrieval is keyword/tag overlap with 6-character stems.
+- Six mode prompts rewritten for profile awareness, with an explicit ban on inventing experience.
+- Context tab in Settings: drop zone, document list, profile summary with a loud "no profile"
+  state, story bank CRUD, session setup form, and per-scope clear buttons.
+- Composer shows a "Profile on / No profile" chip so personalisation is visible at a glance.
+
+**Note on dependencies:** `pdf-parse@1.1.1` and `mammoth` added. pdf-parse 2.x pulls a 36 MB
+`pdfjs-dist` that needs a DOM (`DOMMatrix`) and cannot load in the main process at all; 1.1.1 is
+pure CJS and works headless. Its bundled extra pdf.js copies and test corpus are excluded from
+packaging in `build.files`. Its `lib/pdf-parse.js` entry is required directly, because the package
+root runs a debug harness against a sample PDF when it thinks it is the main module.
 
 ---
 
