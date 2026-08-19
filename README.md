@@ -47,10 +47,10 @@ against your own keys — see [PRIVACY.md](PRIVACY.md) for exactly what goes whe
 ## Install
 
 Download the latest Windows installer from
-[Releases](https://github.com/sohan-a11y/sidecar/releases), or run from source:
+[Releases](https://github.com/Ganeshp000/sidecar/releases), or run from source:
 
 ```bash
-git clone https://github.com/sohan-a11y/sidecar.git
+git clone https://github.com/Ganeshp000/sidecar.git
 cd sidecar
 npm install
 npm run build

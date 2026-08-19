@@ -6,7 +6,7 @@ keys for third-party providers. A vulnerability here is not abstract, so please 
 ## Reporting a vulnerability
 
 Use GitHub's private advisory form:
-<https://github.com/sohan-a11y/sidecar/security/advisories/new>
+<https://github.com/Ganeshp000/sidecar/security/advisories/new>
 
 Please do not open a public issue for anything that could expose keys, recordings, transcripts, or
 screen contents.

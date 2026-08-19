@@ -35,7 +35,7 @@ const ONBOARD_STEPS = [
     title: 'What leaves your machine',
     body: 'There is no Sidecar server. Audio goes to the transcription provider you choose, only while capture is on. Screenshots go to your chat provider, only when a mode needs one. Transcripts, your profile and your settings are stored locally in your user data folder, and Settings has a delete button for each of them. Nothing is uploaded for training, analytics or crash reporting.',
     buttons: [
-      { label: 'Read the full privacy statement', action: 'https://github.com/sohan-a11y/sidecar/blob/main/PRIVACY.md' }
+      { label: 'Read the full privacy statement', action: 'https://github.com/Ganeshp000/sidecar/blob/main/PRIVACY.md' }
     ]
   },
   {
