@@ -64,11 +64,16 @@ app.whenReady().then(() => {
   WindowManager.createWindow();
 
   // 5. Register global shortcut hotkeys
-  ShortcutsManager.registerAll({
-    onAssist: () => IpcRouter.executeMode('assist', ''),
-    onCodeSolve: () => IpcRouter.executeMode('code', ''),
-    onQuickAssist: () => IpcRouter.ensureListeningAndAssist()
+  const conflicts = ShortcutsManager.registerAll({
+    assist: () => IpcRouter.executeMode('assist', ''),
+    code: () => IpcRouter.executeMode('code', ''),
+    quickAssist: () => IpcRouter.ensureListeningAndAssist(),
+    toggleOverlay: () => WindowManager.toggleVisibility()
   });
+
+  if (conflicts && conflicts.length > 0) {
+    console.warn('[App] Shortcut conflicts:', conflicts.map((c) => `${c.accelerator} (${c.reason})`).join(', '));
+  }
 
   app.on('activate', () => {
     if (!WindowManager.getWindow()) {

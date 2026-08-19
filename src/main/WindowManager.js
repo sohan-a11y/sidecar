@@ -1,6 +1,7 @@
 const { BrowserWindow, screen } = require('electron');
 const path = require('path');
 const os = require('os');
+const SettingsManager = require('./SettingsManager');
 
 class WindowManager {
   constructor() {
@@ -9,14 +10,17 @@ class WindowManager {
 
   createWindow() {
     const { workArea } = screen.getPrimaryDisplay();
-    const width = 720;
-    const height = 650;
+    const overlay = SettingsManager.get().overlay || {};
+    const saved = this.validBounds(overlay.bounds);
+
+    const width = saved ? saved.width : 720;
+    const height = saved ? saved.height : 650;
 
     this.window = new BrowserWindow({
       width: width,
       height: height,
-      x: Math.round(workArea.x + (workArea.width - width) / 2),
-      y: workArea.y + 10,
+      x: saved ? saved.x : Math.round(workArea.x + (workArea.width - width) / 2),
+      y: saved ? saved.y : workArea.y + 10,
       frame: false,
       transparent: true,
       hasShadow: false,
@@ -68,8 +72,11 @@ class WindowManager {
       this.window.webContents.openDevTools({ mode: 'detach' });
     }
 
+    this.applyOverlaySettings();
+    this.trackBounds();
+
     this.window.webContents.on('did-finish-load', () => {
-      this.window.showInactive();
+      if (!SettingsManager.get().overlay.hidden) this.window.showInactive();
     });
 
     // Log load failures — critical for diagnosing white screen issues in production
@@ -125,6 +132,138 @@ class WindowManager {
     } catch (e) {
       console.warn('[WindowManager] Could not determine Windows version for content-protection check:', e.message);
     }
+  }
+
+  /** Ignore a saved position that now falls outside every attached display. */
+  validBounds(bounds) {
+    if (!bounds || !Number.isFinite(bounds.x) || !Number.isFinite(bounds.y)) return null;
+    const fits = screen.getAllDisplays().some((display) => {
+      const area = display.workArea;
+      return bounds.x < area.x + area.width
+        && bounds.x + bounds.width > area.x
+        && bounds.y < area.y + area.height
+        && bounds.y + bounds.height > area.y;
+    });
+    return fits ? bounds : null;
+  }
+
+  /** Persist position and size, debounced — move events fire per pixel. */
+  trackBounds() {
+    const save = () => {
+      if (this._boundsTimer) return;
+      this._boundsTimer = setTimeout(() => {
+        this._boundsTimer = null;
+        if (!this.window || this.window.isDestroyed()) return;
+        SettingsManager.set({ overlay: { bounds: this.window.getBounds() } });
+      }, 800);
+      if (this._boundsTimer.unref) this._boundsTimer.unref();
+    };
+    this.window.on('move', save);
+    this.window.on('resize', save);
+  }
+
+  applyOverlaySettings() {
+    if (!this.window || this.window.isDestroyed()) return;
+    const overlay = SettingsManager.get().overlay || {};
+    const opacity = Math.min(1, Math.max(0.25, overlay.opacity || 1));
+    this.window.setOpacity(opacity);
+    this.send('overlay:style', {
+      fontScale: overlay.fontScale || 1,
+      density: overlay.density || 'comfortable'
+    });
+  }
+
+  /** Hide or show without touching capture or the session. */
+  toggleVisibility() {
+    if (!this.window || this.window.isDestroyed()) return false;
+    const nowHidden = this.window.isVisible();
+    if (nowHidden) this.window.hide();
+    else this.window.showInactive();
+    SettingsManager.set({ overlay: { hidden: nowHidden } });
+    return !nowHidden;
+  }
+
+  /** Move the overlay to a named spot on a chosen display. */
+  placeOn(displayId, position = 'top-center') {
+    if (!this.window || this.window.isDestroyed()) return;
+    const displays = screen.getAllDisplays();
+    const display = displays.find((d) => String(d.id) === String(displayId)) || screen.getPrimaryDisplay();
+    const area = display.workArea;
+    const { width, height } = this.window.getBounds();
+
+    const positions = {
+      'top-center': { x: area.x + Math.round((area.width - width) / 2), y: area.y + 10 },
+      'top-left': { x: area.x + 10, y: area.y + 10 },
+      'top-right': { x: area.x + area.width - width - 10, y: area.y + 10 },
+      'bottom-center': { x: area.x + Math.round((area.width - width) / 2), y: area.y + area.height - height - 10 }
+    };
+    const target = positions[position] || positions['top-center'];
+    this.window.setBounds({ ...target, width, height });
+    SettingsManager.set({ overlay: { bounds: this.window.getBounds() } });
+  }
+
+  /**
+   * Open the transparent full-screen layer for picking a capture region.
+   * Resolves with fractions of the screen, or null if cancelled.
+   */
+  openRegionPicker() {
+    if (this.regionWindow && !this.regionWindow.isDestroyed()) {
+      this.regionWindow.focus();
+      return this.regionPromise;
+    }
+
+    const { bounds } = screen.getPrimaryDisplay();
+    this.regionWindow = new BrowserWindow({
+      x: bounds.x,
+      y: bounds.y,
+      width: bounds.width,
+      height: bounds.height,
+      frame: false,
+      transparent: true,
+      hasShadow: false,
+      resizable: false,
+      movable: false,
+      skipTaskbar: true,
+      alwaysOnTop: true,
+      fullscreenable: false,
+      webPreferences: {
+        preload: path.join(__dirname, '../preload/index.js'),
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: false
+      }
+    });
+    this.regionWindow.setAlwaysOnTop(true, 'screen-saver', 2);
+
+    const isDev = process.env.NODE_ENV === 'development';
+    if (isDev) this.regionWindow.loadURL('http://localhost:5173/region.html');
+    else this.regionWindow.loadFile(path.join(__dirname, '../../out/region.html'));
+
+    this.regionPromise = new Promise((resolve) => { this._resolveRegion = resolve; });
+    this.regionWindow.on('closed', () => {
+      this.regionWindow = null;
+      if (this._resolveRegion) {
+        this._resolveRegion(null);
+        this._resolveRegion = null;
+      }
+    });
+    return this.regionPromise;
+  }
+
+  resolveRegion(region) {
+    if (this._resolveRegion) {
+      this._resolveRegion(region);
+      this._resolveRegion = null;
+    }
+    if (this.regionWindow && !this.regionWindow.isDestroyed()) this.regionWindow.close();
+  }
+
+  listDisplays() {
+    return screen.getAllDisplays().map((d, i) => ({
+      id: String(d.id),
+      label: `Display ${i + 1} (${d.size.width}x${d.size.height})`,
+      primary: d.id === screen.getPrimaryDisplay().id
+    }));
   }
 
   setIgnoreMouseEvents(ignore) {
