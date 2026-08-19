@@ -40,7 +40,11 @@ function boot() {
 describe('answer shaping and threading', () => {
   beforeEach(() => boot());
   afterEach(() => {
-    try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch (e) { /* ignore */ }
+    try {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    } catch (e) {
+      /* ignore */
+    }
   });
 
   it('defaults to speaking points', () => {
@@ -55,7 +59,8 @@ describe('answer shaping and threading', () => {
   });
 
   it('lets a single request override the preset', () => {
-    const text = PromptBuilder.build('reply', { transcript: [], preset: 'detailed' }).system[0].text;
+    const text = PromptBuilder.build('reply', { transcript: [], preset: 'detailed' }).system[0]
+      .text;
     expect(text).toContain('full answer');
     expect(text).not.toContain('3-5 bullet points');
   });
@@ -69,7 +74,11 @@ describe('answer shaping and threading', () => {
       { role: 'user', content: 'What is your greatest weakness?' },
       { role: 'assistant', content: 'Delegating early enough.' }
     ];
-    const built = PromptBuilder.build('ask', { transcript: [], userText: 'Say more about that', history });
+    const built = PromptBuilder.build('ask', {
+      transcript: [],
+      userText: 'Say more about that',
+      history
+    });
 
     expect(built.messages).toHaveLength(3);
     expect(built.messages[0].content).toContain('greatest weakness');

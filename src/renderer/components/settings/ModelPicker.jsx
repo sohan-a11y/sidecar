@@ -53,7 +53,9 @@ export default function ModelPicker({
       <datalist id={listId}>
         {models.map((m) => (
           <option key={m.id} value={m.id}>
-            {m.label !== m.id ? m.label : ''}{m.free ? ' · free' : ''}{m.vision ? ' · vision' : ''}
+            {m.label !== m.id ? m.label : ''}
+            {m.free ? ' · free' : ''}
+            {m.vision ? ' · vision' : ''}
           </option>
         ))}
       </datalist>

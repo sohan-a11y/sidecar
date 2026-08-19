@@ -21,10 +21,8 @@ module.exports = {
     const adapter = Providers.get(providerId);
     if (!adapter.transcribe) throw new Error(`${adapter.name} cannot transcribe audio.`);
 
-    return RateLimiter.schedule(
-      providerId,
-      { priority: 'user' },
-      () => adapter.transcribe({ apiKey, baseUrl, model, language, wav })
+    return RateLimiter.schedule(providerId, { priority: 'user' }, () =>
+      adapter.transcribe({ apiKey, baseUrl, model, language, wav })
     );
   }
 };

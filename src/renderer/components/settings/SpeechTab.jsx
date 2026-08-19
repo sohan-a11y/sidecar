@@ -29,9 +29,11 @@ export default function SpeechTab({
               key={e.id}
               className={`provider-tab-btn ${draft.stt.engine === e.id ? 'active' : ''}`}
               onClick={() => patchStt({ engine: e.id })}
-              title={e.streaming
-                ? 'Streaming — words appear as they are spoken'
-                : 'Uploads each utterance once you stop speaking'}
+              title={
+                e.streaming
+                  ? 'Streaming — words appear as they are spoken'
+                  : 'Uploads each utterance once you stop speaking'
+              }
             >
               {e.id === 'batch' ? 'BATCH' : e.name.split(' ')[0].toUpperCase()}
             </button>
@@ -58,9 +60,11 @@ export default function SpeechTab({
               type="text"
               spellCheck="false"
               value={(draft.stt.engineModels || {})[draft.stt.engine] || ''}
-              onChange={(e) => patchStt({
-                engineModels: { ...draft.stt.engineModels, [draft.stt.engine]: e.target.value }
-              })}
+              onChange={(e) =>
+                patchStt({
+                  engineModels: { ...draft.stt.engineModels, [draft.stt.engine]: e.target.value }
+                })
+              }
             />
           </div>
           <KeyField
@@ -98,9 +102,11 @@ export default function SpeechTab({
                 type="text"
                 spellCheck="false"
                 value={draft.stt.models[draft.stt.provider] || ''}
-                onChange={(e) => patchStt({
-                  models: { ...draft.stt.models, [draft.stt.provider]: e.target.value }
-                })}
+                onChange={(e) =>
+                  patchStt({
+                    models: { ...draft.stt.models, [draft.stt.provider]: e.target.value }
+                  })
+                }
               />
             </div>
             {draft.stt.provider === 'custom' && (
@@ -130,7 +136,9 @@ export default function SpeechTab({
                 onClear={() => setKeyDraft('stt', p.id, null)}
               />
             ))}
-            <p className="setting-hint">Kept separate from the chat keys so you can use different accounts.</p>
+            <p className="setting-hint">
+              Kept separate from the chat keys so you can use different accounts.
+            </p>
           </div>
         </>
       )}
@@ -143,9 +151,15 @@ export default function SpeechTab({
             <select
               className="setting-select"
               value={draft.stt.languages.user}
-              onChange={(e) => patchStt({ languages: { ...draft.stt.languages, user: e.target.value } })}
+              onChange={(e) =>
+                patchStt({ languages: { ...draft.stt.languages, user: e.target.value } })
+              }
             >
-              {languages.map(([code, label]) => <option key={code} value={code}>{label}</option>)}
+              {languages.map(([code, label]) => (
+                <option key={code} value={code}>
+                  {label}
+                </option>
+              ))}
             </select>
           </label>
           <label className="select-cell">
@@ -153,9 +167,15 @@ export default function SpeechTab({
             <select
               className="setting-select"
               value={draft.stt.languages.system}
-              onChange={(e) => patchStt({ languages: { ...draft.stt.languages, system: e.target.value } })}
+              onChange={(e) =>
+                patchStt({ languages: { ...draft.stt.languages, system: e.target.value } })
+              }
             >
-              {languages.map(([code, label]) => <option key={code} value={code}>{label}</option>)}
+              {languages.map(([code, label]) => (
+                <option key={code} value={code}>
+                  {label}
+                </option>
+              ))}
             </select>
           </label>
         </div>

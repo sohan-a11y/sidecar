@@ -491,3 +491,12 @@ Runnable any time after Phase 0.
 
 **Fixed while testing:** the module-load test could exceed vitest's 5 s default because pdf-parse
 loads a ~6 MB bundle, making the suite intermittently red. It now has an explicit timeout.
+
+**Post-release hotfix:** live testing found Google had retired `gemini-2.5-flash` and
+`gemini-2.5-flash-lite` for new callers — but `/v1beta/models` still lists them, so the existing
+"is the configured model still in the list" check passed while `generateContent` 404'd. Defaults
+now point at the `-latest` alias ids (`gemini-flash-lite-latest`, `gemini-flash-latest`), which
+redirect server-side and don't go stale the same way, and `pickFallbackModel()` now prefers an
+alias over a pinned id whenever the live list offers one — not just whichever happens to sort
+first. Verified end-to-end through `LlmService.stream()` (the real dispatcher) against both Gemini
+and TokenRouter with live keys.

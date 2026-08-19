@@ -39,11 +39,15 @@ export default function StoryBank({ sidecar, stories, onContextChange }) {
     <div className="setting-group story-bank">
       <div className="model-picker-head">
         <label className="setting-label">Story bank</label>
-        <button type="button" className="link-btn" onClick={startNew}>Add story</button>
+        <button type="button" className="link-btn" onClick={startNew}>
+          Add story
+        </button>
       </div>
 
       {stories.length === 0 && !editing && (
-        <p className="setting-hint">No stories yet. Behavioural answers fall back to the résumé bullets.</p>
+        <p className="setting-hint">
+          No stories yet. Behavioural answers fall back to the résumé bullets.
+        </p>
       )}
 
       <ul className="story-list">
@@ -55,8 +59,12 @@ export default function StoryBank({ sidecar, stories, onContextChange }) {
                 <span className="story-tags">{s.tags.map((t) => `#${t}`).join(' ')}</span>
               )}
             </div>
-            <button type="button" className="link-btn" onClick={() => setEditing({ ...s })}>Edit</button>
-            <button type="button" className="link-btn danger" onClick={() => remove(s.id)}>Delete</button>
+            <button type="button" className="link-btn" onClick={() => setEditing({ ...s })}>
+              Edit
+            </button>
+            <button type="button" className="link-btn danger" onClick={() => remove(s.id)}>
+              Delete
+            </button>
           </li>
         ))}
       </ul>
@@ -90,18 +98,27 @@ export default function StoryBank({ sidecar, stories, onContextChange }) {
               type="text"
               placeholder="leadership, conflict, scaling"
               value={editing.tags.join(', ')}
-              onChange={(e) => setEditing({
-                ...editing,
-                tags: e.target.value.split(',').map((t) => t.trim()).filter(Boolean)
-              })}
+              onChange={(e) =>
+                setEditing({
+                  ...editing,
+                  tags: e.target.value
+                    .split(',')
+                    .map((t) => t.trim())
+                    .filter(Boolean)
+                })
+              }
             />
           </div>
 
           {error && <p className="setting-warning">{error}</p>}
 
           <div className="context-actions">
-            <button type="button" className="link-btn" onClick={save}>Save story</button>
-            <button type="button" className="link-btn danger" onClick={() => setEditing(null)}>Cancel</button>
+            <button type="button" className="link-btn" onClick={save}>
+              Save story
+            </button>
+            <button type="button" className="link-btn danger" onClick={() => setEditing(null)}>
+              Cancel
+            </button>
           </div>
         </div>
       )}

@@ -7,32 +7,38 @@ const MODES = {
   assist: {
     requiresScreen: true,
     requiresTranscript: true,
-    systemPrompt: "You are Sidecar, a live copilot sitting beside the user during a call or interview. Read the screen image and the conversation, then give the single most useful thing they should say or do right now, grounded in their own background. No preamble, no meta-commentary."
+    systemPrompt:
+      'You are Sidecar, a live copilot sitting beside the user during a call or interview. Read the screen image and the conversation, then give the single most useful thing they should say or do right now, grounded in their own background. No preamble, no meta-commentary.'
   },
   reply: {
     requiresScreen: false,
     requiresTranscript: true,
-    systemPrompt: "You are Sidecar. Draft what the user should say next, in the first person and in their own voice, drawing on their real experience. Keep it speakable: 1-2 sentences unless the question genuinely needs more."
+    systemPrompt:
+      'You are Sidecar. Draft what the user should say next, in the first person and in their own voice, drawing on their real experience. Keep it speakable: 1-2 sentences unless the question genuinely needs more.'
   },
   summarize: {
     requiresScreen: false,
     requiresTranscript: true,
-    systemPrompt: "You are Sidecar. Summarize the conversation so far: main talking points, decisions reached, and open next steps, as a short bulleted list. Note anything the user was asked to follow up on."
+    systemPrompt:
+      'You are Sidecar. Summarize the conversation so far: main talking points, decisions reached, and open next steps, as a short bulleted list. Note anything the user was asked to follow up on.'
   },
   questions: {
     requiresScreen: false,
     requiresTranscript: true,
-    systemPrompt: "You are Sidecar. Suggest 3 questions the user could ask next that are specific to this conversation, this company and this role — not generic filler. Favour questions their own background makes credible."
+    systemPrompt:
+      'You are Sidecar. Suggest 3 questions the user could ask next that are specific to this conversation, this company and this role — not generic filler. Favour questions their own background makes credible.'
   },
   code: {
     requiresScreen: true,
     requiresTranscript: false,
-    systemPrompt: "You are Sidecar, an expert software engineer. Analyse the coding problem on screen and give: 1. A short statement of the approach. 2. A clean, correctly formatted code block. 3. Time and space complexity. Prefer a language the user already knows if the problem allows a choice."
+    systemPrompt:
+      'You are Sidecar, an expert software engineer. Analyse the coding problem on screen and give: 1. A short statement of the approach. 2. A clean, correctly formatted code block. 3. Time and space complexity. Prefer a language the user already knows if the problem allows a choice.'
   },
   ask: {
     requiresScreen: true,
     requiresTranscript: true,
-    systemPrompt: "You are Sidecar. Answer the user's question directly, using the screen capture, the conversation and their own background as context. Lead with the answer; keep it brief."
+    systemPrompt:
+      "You are Sidecar. Answer the user's question directly, using the screen capture, the conversation and their own background as context. Lead with the answer; keep it brief."
   }
 };
 
@@ -160,18 +166,19 @@ class LlmService {
           this.status(`${adapter.name} returned ${status || 'an error'} — retry ${attempt} of 3.`);
         }
       },
-      () => adapter.streamChat(
-        {
-          apiKey: eff.llm.apiKey,
-          baseUrl: eff.llm.baseUrl,
-          model: target.model,
-          system: systemPrompt,
-          messages,
-          images: target.images,
-          signal
-        },
-        emit
-      )
+      () =>
+        adapter.streamChat(
+          {
+            apiKey: eff.llm.apiKey,
+            baseUrl: eff.llm.baseUrl,
+            model: target.model,
+            system: systemPrompt,
+            messages,
+            images: target.images,
+            signal
+          },
+          emit
+        )
     );
   }
 
@@ -217,7 +224,11 @@ class LlmService {
       const entry = SettingsManager.cacheModels(providerId, models);
       return { models, cached: false, fetchedAt: entry.fetchedAt };
     }
-    return { models: cached ? cached.models : [], cached: true, fetchedAt: cached ? cached.fetchedAt : 0 };
+    return {
+      models: cached ? cached.models : [],
+      cached: true,
+      fetchedAt: cached ? cached.fetchedAt : 0
+    };
   }
 }
 

@@ -33,7 +33,10 @@ function boot() {
     exports: {
       app: { getPath: () => tmpDir, quit() {} },
       safeStorage: { isEncryptionAvailable: () => false },
-      screen: { getPrimaryDisplay: () => ({ size: { width: 1920, height: 1080 } }), getAllDisplays: () => [] },
+      screen: {
+        getPrimaryDisplay: () => ({ size: { width: 1920, height: 1080 } }),
+        getAllDisplays: () => []
+      },
       desktopCapturer: { getSources: async () => [] },
       globalShortcut: {
         register: (accelerator) => {
@@ -41,8 +44,11 @@ function boot() {
           registered.push(accelerator);
           return true;
         },
-        isRegistered: (accelerator) => ownedByOthers.has(accelerator) || registered.includes(accelerator),
-        unregisterAll: () => { registered = []; }
+        isRegistered: (accelerator) =>
+          ownedByOthers.has(accelerator) || registered.includes(accelerator),
+        unregisterAll: () => {
+          registered = [];
+        }
       }
     }
   };
@@ -72,7 +78,11 @@ function gradient(brightCount) {
 describe('capture change detection', () => {
   beforeEach(() => boot());
   afterEach(() => {
-    try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch (e) { /* ignore */ }
+    try {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    } catch (e) {
+      /* ignore */
+    }
   });
 
   it('produces a 64-bit hash', () => {
@@ -107,12 +117,19 @@ describe('capture change detection', () => {
 describe('shortcut registration', () => {
   beforeEach(() => boot());
   afterEach(() => {
-    try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch (e) { /* ignore */ }
+    try {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    } catch (e) {
+      /* ignore */
+    }
   });
 
   it('registers every configured binding', () => {
     const conflicts = ShortcutsManager.registerAll({
-      assist: () => {}, code: () => {}, quickAssist: () => {}, toggleOverlay: () => {}
+      assist: () => {},
+      code: () => {},
+      quickAssist: () => {},
+      toggleOverlay: () => {}
     });
     expect(conflicts).toEqual([]);
     expect(registered).toContain('CommandOrControl+Return');
@@ -129,7 +146,9 @@ describe('shortcut registration', () => {
   });
 
   it('reports two actions bound to the same combination', () => {
-    SettingsManager.set({ shortcuts: { assist: 'CommandOrControl+J', code: 'CommandOrControl+J' } });
+    SettingsManager.set({
+      shortcuts: { assist: 'CommandOrControl+J', code: 'CommandOrControl+J' }
+    });
     const conflicts = ShortcutsManager.registerAll({ assist: () => {}, code: () => {} });
 
     expect(conflicts).toHaveLength(1);

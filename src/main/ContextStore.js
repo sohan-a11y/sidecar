@@ -107,7 +107,10 @@ class ContextStore {
     }
 
     const extracted = await this.extract(ext, buffer, filename);
-    const text = extracted.text.replace(/\r\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+    const text = extracted.text
+      .replace(/\r\n/g, '\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
     if (!text) {
       throw new Error(`No readable text in "${filename}". Scanned PDFs need OCR first.`);
     }
@@ -132,7 +135,9 @@ class ContextStore {
     if (ext === '.pdf') {
       const parsed = await pdfParse(buffer, { max: MAX_PAGES });
       if (parsed.numpages > MAX_PAGES) {
-        console.warn(`[ContextStore] "${filename}" has ${parsed.numpages} pages; read the first ${MAX_PAGES}.`);
+        console.warn(
+          `[ContextStore] "${filename}" has ${parsed.numpages} pages; read the first ${MAX_PAGES}.`
+        );
       }
       return { text: parsed.text || '', pages: parsed.numpages || null };
     }
@@ -152,8 +157,8 @@ class ContextStore {
 
   /** Every ingested document, concatenated — the input to profile distillation. */
   rawText() {
-    return this.load().documents
-      .map((d) => `--- ${d.filename} ---\n${d.text}`)
+    return this.load()
+      .documents.map((d) => `--- ${d.filename} ---\n${d.text}`)
       .join('\n\n');
   }
 
@@ -169,42 +174,59 @@ class ContextStore {
       name: str(raw.name),
       headline: str(raw.headline),
       location: str(raw.location),
-      yearsExperience: Number.isFinite(Number(raw.yearsExperience)) && raw.yearsExperience !== null
-        ? Number(raw.yearsExperience)
-        : null,
-      skills: arr(raw.skills).map((s) => (typeof s === 'string'
-        ? { name: s, level: '', years: null }
-        : { name: str(s.name), level: str(s.level), years: s.years ?? null })).filter((s) => s.name),
-      experience: arr(raw.experience).map((e) => ({
-        company: str(e.company),
-        title: str(e.title),
-        start: str(e.start),
-        end: str(e.end),
-        bullets: arr(e.bullets).map(str).filter(Boolean),
-        metrics: arr(e.metrics).map(str).filter(Boolean)
-      })).filter((e) => e.company || e.title),
-      projects: arr(raw.projects).map((p) => ({
-        name: str(p.name),
-        summary: str(p.summary),
-        stack: arr(p.stack).map(str).filter(Boolean),
-        impact: str(p.impact)
-      })).filter((p) => p.name),
-      education: arr(raw.education).map((e) => (typeof e === 'string' ? { school: e } : {
-        school: str(e.school || e.institution),
-        degree: str(e.degree),
-        field: str(e.field),
-        start: str(e.start),
-        end: str(e.end)
-      })).filter((e) => e.school || e.degree),
-      stories: arr(raw.stories).map((s, i) => ({
-        id: str(s.id) || `story_${Date.now()}_${i}`,
-        title: str(s.title),
-        situation: str(s.situation),
-        task: str(s.task),
-        action: str(s.action),
-        result: str(s.result),
-        tags: arr(s.tags).map(str).filter(Boolean)
-      })).filter((s) => s.title || s.situation || s.action)
+      yearsExperience:
+        Number.isFinite(Number(raw.yearsExperience)) && raw.yearsExperience !== null
+          ? Number(raw.yearsExperience)
+          : null,
+      skills: arr(raw.skills)
+        .map((s) =>
+          typeof s === 'string'
+            ? { name: s, level: '', years: null }
+            : { name: str(s.name), level: str(s.level), years: s.years ?? null }
+        )
+        .filter((s) => s.name),
+      experience: arr(raw.experience)
+        .map((e) => ({
+          company: str(e.company),
+          title: str(e.title),
+          start: str(e.start),
+          end: str(e.end),
+          bullets: arr(e.bullets).map(str).filter(Boolean),
+          metrics: arr(e.metrics).map(str).filter(Boolean)
+        }))
+        .filter((e) => e.company || e.title),
+      projects: arr(raw.projects)
+        .map((p) => ({
+          name: str(p.name),
+          summary: str(p.summary),
+          stack: arr(p.stack).map(str).filter(Boolean),
+          impact: str(p.impact)
+        }))
+        .filter((p) => p.name),
+      education: arr(raw.education)
+        .map((e) =>
+          typeof e === 'string'
+            ? { school: e }
+            : {
+                school: str(e.school || e.institution),
+                degree: str(e.degree),
+                field: str(e.field),
+                start: str(e.start),
+                end: str(e.end)
+              }
+        )
+        .filter((e) => e.school || e.degree),
+      stories: arr(raw.stories)
+        .map((s, i) => ({
+          id: str(s.id) || `story_${Date.now()}_${i}`,
+          title: str(s.title),
+          situation: str(s.situation),
+          task: str(s.task),
+          action: str(s.action),
+          result: str(s.result),
+          tags: arr(s.tags).map(str).filter(Boolean)
+        }))
+        .filter((s) => s.title || s.situation || s.action)
     };
   }
 
