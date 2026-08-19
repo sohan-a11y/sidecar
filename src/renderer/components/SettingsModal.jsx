@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import ModelPicker from './settings/ModelPicker';
 import KeyField from './settings/KeyField';
+import ContextTab from './settings/ContextTab';
 
 const KEY_PLACEHOLDERS = {
   openai: 'sk-...',
@@ -21,6 +22,7 @@ const LANGUAGES = [
 ];
 
 const TABS = [
+  ['context', 'Context'],
   ['models', 'Models'],
   ['speech', 'Speech'],
   ['limits', 'Limits']
@@ -28,7 +30,9 @@ const TABS = [
 
 export default function SettingsModal({ isOpen, onClose, sidecar }) {
   const [view, setView] = useState(null);
-  const [tab, setTab] = useState('models');
+  const [tab, setTab] = useState('context');
+  const [context, setContext] = useState(null);
+  const [progressStage, setProgressStage] = useState('');
   const [draft, setDraft] = useState(null);
   const [keyDrafts, setKeyDrafts] = useState({});
   const [modelLists, setModelLists] = useState({});
@@ -38,10 +42,21 @@ export default function SettingsModal({ isOpen, onClose, sidecar }) {
     if (isOpen) loadSettings();
   }, [isOpen]);
 
+  // Subscribed once: the preload bridge has no listener-removal API, so re-subscribing
+  // on every open would stack duplicate handlers.
+  useEffect(() => {
+    sidecar.on('context:changed', (next) => setContext(next));
+    sidecar.on('context:progress', ({ stage }) => setProgressStage(stage || ''));
+  }, []);
+
   const loadSettings = async () => {
     try {
-      const data = await sidecar.getSettings();
+      const [data, contextData] = await Promise.all([
+        sidecar.getSettings(),
+        sidecar.context.get()
+      ]);
       setView(data);
+      setContext(contextData);
       setDraft({
         llm: JSON.parse(JSON.stringify(data.llm)),
         stt: JSON.parse(JSON.stringify(data.stt)),
@@ -176,6 +191,15 @@ export default function SettingsModal({ isOpen, onClose, sidecar }) {
         </div>
 
         <div className="modal-body">
+          {tab === 'context' && (
+            <ContextTab
+              sidecar={sidecar}
+              context={context}
+              onContextChange={setContext}
+              progressStage={progressStage}
+            />
+          )}
+
           {tab === 'models' && (
             <>
               <div className="setting-group">

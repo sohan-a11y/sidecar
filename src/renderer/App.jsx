@@ -32,6 +32,7 @@ export default function App() {
   const [isSmart, setIsSmart] = useState(false);
   const [usage, setUsage] = useState({});
   const [llmProvider, setLlmProvider] = useState('openai');
+  const [hasProfile, setHasProfile] = useState(false);
 
   useEffect(() => {
     bootApp();
@@ -49,6 +50,8 @@ export default function App() {
       applySettings(data);
       const snapshot = await sidecar.getUsage();
       setUsage(snapshot || {});
+      const context = await sidecar.context.get();
+      setHasProfile(!!(context && context.hasProfile));
       if (!data.onboardingComplete) {
         setIsOnboardingOpen(true);
       }
@@ -74,6 +77,12 @@ export default function App() {
 
     window.addEventListener('mousemove', handleMouseMove);
     sidecar.setMouseIgnore(true);
+
+    // Without this, dropping a file anywhere navigates the window to that file
+    // and the overlay is replaced by a PDF viewer.
+    const swallow = (e) => e.preventDefault();
+    window.addEventListener('dragover', swallow);
+    window.addEventListener('drop', swallow);
   };
 
   const setupListeners = () => {
@@ -106,6 +115,11 @@ export default function App() {
     // 3c. Main rewrote settings under us (e.g. a retired model was replaced)
     sidecar.on('settings:changed', (data) => {
       applySettings(data);
+    });
+
+    // 3d. Context changed — the composer shows whether answers are personalised
+    sidecar.on('context:changed', (context) => {
+      setHasProfile(!!(context && context.hasProfile));
     });
 
     // 4. LLM Streaming started
@@ -351,6 +365,7 @@ export default function App() {
             userText={userText}
             setUserText={setUserText}
             usage={usage[llmProvider]}
+            hasProfile={hasProfile}
             isSmart={isSmart}
             onToggleSmart={handleToggleSmart}
             onOpenSettings={() => setIsSettingsOpen(true)}
