@@ -13,7 +13,8 @@ const ALLOWED_EVENTS = [
   'usage',
   'settings:changed',
   'context:changed',
-  'context:progress'
+  'context:progress',
+  'session:state'
 ];
 
 contextBridge.exposeInMainWorld('sidecar', {
@@ -33,6 +34,18 @@ contextBridge.exposeInMainWorld('sidecar', {
     deleteStory: (id) => ipcRenderer.invoke('sidecar:context:story:delete', id),
     setSession: (patch) => ipcRenderer.invoke('sidecar:context:session:set', patch),
     clear: (scope) => ipcRenderer.invoke('sidecar:context:clear', scope)
+  },
+  session: {
+    state: () => ipcRenderer.invoke('sidecar:session:state'),
+    transcript: () => ipcRenderer.invoke('sidecar:session:transcript'),
+    start: (title) => ipcRenderer.invoke('sidecar:session:start', title),
+    end: () => ipcRenderer.invoke('sidecar:session:end'),
+    list: () => ipcRenderer.invoke('sidecar:session:list'),
+    open: (id) => ipcRenderer.invoke('sidecar:session:open', id),
+    rename: (id, title) => ipcRenderer.invoke('sidecar:session:rename', { id, title }),
+    remove: (id) => ipcRenderer.invoke('sidecar:session:remove', id),
+    removeAll: () => ipcRenderer.invoke('sidecar:session:remove-all'),
+    export: (id, format) => ipcRenderer.invoke('sidecar:session:export', { id, format })
   },
   runMode: (payload) => ipcRenderer.send('sidecar:run-mode', payload),
   toggleListening: () => ipcRenderer.invoke('sidecar:toggle-listening'),

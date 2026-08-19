@@ -47,7 +47,7 @@ class PromptBuilder {
    * @param {{ transcript?: Array, userText?: string, images?: Array }} context
    * @returns {{ system: Array<{text:string, cacheable:boolean}>, messages: Array }}
    */
-  build(mode, { transcript = [], userText = '', images = [] } = {}) {
+  build(mode, { transcript = [], transcriptSummary = '', userText = '', images = [] } = {}) {
     const modeConfig = LlmService.modes[mode];
     if (!modeConfig) throw new Error(`Unknown mode: ${mode}`);
 
@@ -73,7 +73,7 @@ class PromptBuilder {
     const stories = hasProfile ? this.retrieveStories(profile, query) : [];
     if (stories.length > 0) parts.push(this.storiesBlock(stories));
 
-    if (modeConfig.requiresTranscript) parts.push(this.transcriptBlock(transcript));
+    if (modeConfig.requiresTranscript) parts.push(this.transcriptBlock(transcript, transcriptSummary));
 
     parts.push(this.taskBlock(mode, userText, images));
 
@@ -238,12 +238,20 @@ class PromptBuilder {
     return lines.join('\n');
   }
 
-  transcriptBlock(transcript) {
-    if (!transcript || transcript.length === 0) return 'CONVERSATION\n(nothing transcribed yet)';
-    const turns = transcript
-      .map((t) => `${t.sender === 'user' ? 'You' : 'Them'}: ${t.text}`)
-      .join('\n');
-    return `CONVERSATION\n${turns}`;
+  /**
+   * The windowed slice, prefixed by the running summary of everything that has
+   * scrolled out of it. SessionManager owns the windowing; this only renders.
+   */
+  transcriptBlock(transcript, summary = '') {
+    const lines = ['CONVERSATION'];
+    if (summary) lines.push(`Earlier in this conversation: ${summary}`, '');
+
+    if (!transcript || transcript.length === 0) {
+      lines.push(summary ? '(no further turns yet)' : '(nothing transcribed yet)');
+    } else {
+      lines.push(...transcript.map((t) => `${t.sender === 'user' ? 'You' : 'Them'}: ${t.text}`));
+    }
+    return lines.join('\n');
   }
 
   taskBlock(mode, userText, images) {

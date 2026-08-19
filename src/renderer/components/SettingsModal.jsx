@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import ModelPicker from './settings/ModelPicker';
 import KeyField from './settings/KeyField';
 import ContextTab from './settings/ContextTab';
+import SessionsTab from './settings/SessionsTab';
 
 const KEY_PLACEHOLDERS = {
   openai: 'sk-...',
@@ -23,6 +24,7 @@ const LANGUAGES = [
 
 const TABS = [
   ['context', 'Context'],
+  ['sessions', 'Sessions'],
   ['models', 'Models'],
   ['speech', 'Speech'],
   ['limits', 'Limits']
@@ -60,7 +62,9 @@ export default function SettingsModal({ isOpen, onClose, sidecar }) {
       setDraft({
         llm: JSON.parse(JSON.stringify(data.llm)),
         stt: JSON.parse(JSON.stringify(data.stt)),
-        rateLimits: JSON.parse(JSON.stringify(data.rateLimits))
+        rateLimits: JSON.parse(JSON.stringify(data.rateLimits)),
+        sessions: JSON.parse(JSON.stringify(data.sessions)),
+        transcript: JSON.parse(JSON.stringify(data.transcript))
       });
       setKeyDrafts({});
     } catch (e) {
@@ -154,7 +158,9 @@ export default function SettingsModal({ isOpen, onClose, sidecar }) {
           models: draft.stt.models,
           apiKeys: collectKeys('stt', sttProviders.map((p) => p.id))
         },
-        rateLimits: draft.rateLimits
+        rateLimits: draft.rateLimits,
+        sessions: draft.sessions,
+        transcript: draft.transcript
       };
       const updated = await sidecar.setSettings(patch);
       setView(updated);
@@ -197,6 +203,14 @@ export default function SettingsModal({ isOpen, onClose, sidecar }) {
               context={context}
               onContextChange={setContext}
               progressStage={progressStage}
+            />
+          )}
+
+          {tab === 'sessions' && (
+            <SessionsTab
+              sidecar={sidecar}
+              retention={draft.sessions}
+              onRetentionChange={(sessions) => setDraft((d) => ({ ...d, sessions }))}
             />
           )}
 
@@ -381,6 +395,42 @@ export default function SettingsModal({ isOpen, onClose, sidecar }) {
           )}
 
           {tab === 'limits' && (
+            <>
+            <div className="setting-group">
+              <label className="setting-label">Transcript window</label>
+              <p className="setting-hint">
+                Only the most recent turns go to the model; everything older is folded into a
+                running summary.
+              </p>
+              <div className="limit-row">
+                <span className="limit-name">Turns kept verbatim</span>
+                <label className="limit-input">
+                  <span>turns</span>
+                  <input
+                    type="number"
+                    min="4"
+                    value={draft.transcript.windowTurns}
+                    onChange={(e) => setDraft((d) => ({
+                      ...d,
+                      transcript: { ...d.transcript, windowTurns: Math.max(4, Number(e.target.value) || 4) }
+                    }))}
+                  />
+                </label>
+                <label className="limit-input">
+                  <span>token cap</span>
+                  <input
+                    type="number"
+                    min="500"
+                    step="500"
+                    value={draft.transcript.maxPromptTokens}
+                    onChange={(e) => setDraft((d) => ({
+                      ...d,
+                      transcript: { ...d.transcript, maxPromptTokens: Math.max(500, Number(e.target.value) || 500) }
+                    }))}
+                  />
+                </label>
+              </div>
+            </div>
             <div className="setting-group">
               <label className="setting-label">Request budget per provider</label>
               <p className="setting-hint">
@@ -426,6 +476,7 @@ export default function SettingsModal({ isOpen, onClose, sidecar }) {
                 );
               })}
             </div>
+            </>
           )}
 
           {saveStatus && <div className="save-status-msg">{saveStatus}</div>}

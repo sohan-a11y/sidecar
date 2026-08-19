@@ -1,4 +1,5 @@
-const { ipcMain, shell, app } = require('electron');
+const { ipcMain, shell, app, dialog } = require('electron');
+const fs = require('fs');
 const SettingsManager = require('./SettingsManager');
 const WindowManager = require('./WindowManager');
 const MediaCapture = require('./MediaCapture');
@@ -7,6 +8,7 @@ const LlmService = require('./LlmService');
 const PromptBuilder = require('./PromptBuilder');
 const ContextStore = require('./ContextStore');
 const ProfileBuilder = require('./ProfileBuilder');
+const SessionManager = require('./SessionManager');
 const RateLimiter = require('./RateLimiter');
 const Providers = require('./providers');
 const { isAbort } = require('./providers/util');
@@ -15,7 +17,6 @@ const TRANSCRIPTION_INTERVAL_MS = 3500;
 
 class IpcRouter {
   constructor() {
-    this.transcript = [];
     this.transcriptionTimer = null;
     this.transcriptionBusy = { user: false, system: false };
     this.isLlmBusy = false;
@@ -25,6 +26,7 @@ class IpcRouter {
 
   initialize() {
     RateLimiter.init(app.getPath('userData'));
+    SessionManager.init(app.getPath('userData'));
     this.applyRateLimits();
 
     // Main-process modules report to the user through one channel.
@@ -32,6 +34,16 @@ class IpcRouter {
     TranscriptionService.onStatus = (message) => WindowManager.send('status', { message });
     RateLimiter.onChange = (snapshot) => WindowManager.send('usage', snapshot);
     ContextStore.onChange = (view) => WindowManager.send('context:changed', view);
+    SessionManager.onChange = (state) => WindowManager.send('session:state', state);
+    SessionManager.onSummaryNeeded = (turns, previous) => this.summariseTurns(turns, previous);
+
+    // A session file with no end time means the app died mid-conversation.
+    const recovered = SessionManager.recover();
+    if (recovered) {
+      WindowManager.send('status', {
+        message: `Recovered the session "${recovered.title}" from an unclean shutdown.`
+      });
+    }
 
     // 1. Settings handlers — the renderer only ever sees the redacted view.
     ipcMain.handle('sidecar:settings:get', () => SettingsManager.publicView());
@@ -48,8 +60,12 @@ class IpcRouter {
     ipcMain.handle('sidecar:toggle-listening', () => {
       const state = !MediaCapture.isListening;
       const active = MediaCapture.toggleListening(state);
-      if (active) this.startTranscriptionLoop();
-      else this.stopTranscriptionLoop();
+      if (active) {
+        SessionManager.start();
+        this.startTranscriptionLoop();
+      } else {
+        this.stopTranscriptionLoop();
+      }
       WindowManager.send('capture:state', { active });
       return active;
     });
@@ -148,6 +164,48 @@ class IpcRouter {
       return ContextStore.publicView();
     });
 
+    // 11. Sessions
+    ipcMain.handle('sidecar:session:state', () => SessionManager.state());
+    ipcMain.handle('sidecar:session:transcript', () => SessionManager.transcriptView());
+    ipcMain.handle('sidecar:session:start', (_event, title) => SessionManager.start(title) && SessionManager.state());
+    ipcMain.handle('sidecar:session:end', () => {
+      SessionManager.end();
+      return SessionManager.state();
+    });
+    ipcMain.handle('sidecar:session:list', () => SessionManager.list());
+    ipcMain.handle('sidecar:session:rename', (_event, { id, title }) => {
+      SessionManager.rename(id, title);
+      return SessionManager.list();
+    });
+    ipcMain.handle('sidecar:session:remove', (_event, id) => {
+      SessionManager.remove(id);
+      return SessionManager.list();
+    });
+    ipcMain.handle('sidecar:session:remove-all', () => {
+      SessionManager.removeAll();
+      return SessionManager.list();
+    });
+    ipcMain.handle('sidecar:session:open', (_event, id) => {
+      const record = SessionManager.readFile(id);
+      return record ? { ok: true, session: record } : { ok: false, error: 'That session is no longer on disk.' };
+    });
+    ipcMain.handle('sidecar:session:export', async (_event, { id, format }) => {
+      try {
+        const contents = SessionManager.export(id, format);
+        const extension = format === 'json' ? 'json' : (format === 'txt' ? 'txt' : 'md');
+        const result = await dialog.showSaveDialog(WindowManager.getWindow(), {
+          title: 'Export session',
+          defaultPath: `${id}.${extension}`,
+          filters: [{ name: extension.toUpperCase(), extensions: [extension] }]
+        });
+        if (result.canceled || !result.filePath) return { ok: false, cancelled: true };
+        fs.writeFileSync(result.filePath, contents, 'utf8');
+        return { ok: true, path: result.filePath };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    });
+
     ipcMain.handle('sidecar:context:clear', (_event, scope) => {
       if (scope === 'session') ContextStore.clearSession();
       else ContextStore.clearAll();
@@ -155,6 +213,39 @@ class IpcRouter {
     });
 
     this.validateConfiguredModels();
+  }
+
+  /**
+   * Fold the turns that fell out of the prompt window into a running summary.
+   * Runs at 'auto' priority so it can never delay a hotkey press.
+   */
+  async summariseTurns(turns, previousSummary) {
+    const rendered = turns
+      .map((t) => `${t.sender === 'user' ? 'You' : 'Them'}: ${t.text}`)
+      .join(String.fromCharCode(10));
+
+    const instruction = [
+      'Previous summary:',
+      previousSummary || '(none yet)',
+      '',
+      'New turns to fold in:',
+      rendered,
+      '',
+      'Return the updated summary only, under 150 words.'
+    ].join(String.fromCharCode(10));
+
+    let out = '';
+    await LlmService.stream(
+      {
+        system: 'You maintain a running summary of a live conversation. Keep names, decisions, '
+          + 'numbers and anything the user was asked to follow up on. Drop small talk. '
+          + 'Write plain prose, no headings, no preamble.',
+        messages: [{ role: 'user', content: instruction }],
+        priority: 'auto'
+      },
+      (token) => { out += token; }
+    );
+    return out;
   }
 
   applyRateLimits() {
@@ -251,12 +342,13 @@ class IpcRouter {
     try {
       const text = await TranscriptionService.transcribe(pcm, source);
       if (text && text.trim()) {
-        const turn = {
+        const turn = SessionManager.upsertTurn({
           sender: source === 'user' ? 'user' : 'system',
+          channel: source,
           text: text.trim(),
-          timestamp: Date.now()
-        };
-        this.transcript.push(turn);
+          timestamp: Date.now(),
+          interim: false
+        });
         WindowManager.send('transcript', turn);
       }
     } catch (e) {
@@ -299,12 +391,15 @@ class IpcRouter {
         }
       }
 
+      const window = SessionManager.getPromptWindow();
       const prompt = PromptBuilder.build(mode, {
-        transcript: this.transcript,
+        transcript: window.turns,
+        transcriptSummary: window.summary,
         userText,
         images
       });
 
+      let answerText = '';
       await LlmService.stream(
         {
           mode,
@@ -314,8 +409,20 @@ class IpcRouter {
           signal: controller.signal,
           priority
         },
-        (token) => WindowManager.send('llm:token', { text: token })
+        (token) => {
+          answerText += token;
+          WindowManager.send('llm:token', { text: token });
+        }
       );
+
+      const eff = SettingsManager.effective();
+      SessionManager.addAnswer({
+        mode,
+        provider: eff.llm.provider,
+        model: eff.llm.model,
+        text: answerText,
+        userText
+      });
 
       WindowManager.send('llm:done', {});
     } catch (err) {
