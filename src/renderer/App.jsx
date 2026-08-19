@@ -57,6 +57,7 @@ export default function App() {
   const [hasProfile, setHasProfile] = useState(false);
   const [turns, setTurns] = useState([]);
   const [session, setSession] = useState({ active: false, turnCount: 0, estimatedTokens: 0 });
+  const [autoAnswer, setAutoAnswer] = useState(false);
 
   useEffect(() => {
     bootApp();
@@ -78,6 +79,8 @@ export default function App() {
       setHasProfile(!!(context && context.hasProfile));
       setSession(await sidecar.session.state());
       setTurns(await sidecar.session.transcript());
+      const auto = await sidecar.autoAnswer.get();
+      setAutoAnswer(!!(auto && auto.enabled));
       if (!data.onboardingComplete) {
         setIsOnboardingOpen(true);
       }
@@ -139,6 +142,15 @@ export default function App() {
         }
         return [...prev, turn];
       });
+    });
+
+    // 3z. Auto-answer fired — show what triggered it above the answer
+    sidecar.on('auto-answer:fired', ({ trigger, confidence }) => {
+      setMessages((prev) => [...prev, {
+        role: 'trigger',
+        text: trigger,
+        confidence
+      }]);
     });
 
     // 3a. Session lifecycle
@@ -350,6 +362,11 @@ export default function App() {
   return (
     <div id="app-wrapper">
       <Header 
+        autoAnswer={autoAnswer}
+        onToggleAutoAnswer={async () => {
+          const next = await sidecar.autoAnswer.toggle(!autoAnswer);
+          setAutoAnswer(!!(next && next.enabled));
+        }}
         session={session}
         onEndSession={async () => setSession(await sidecar.session.end())}
         isListening={isListening} 

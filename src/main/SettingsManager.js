@@ -64,6 +64,17 @@ class SettingsManager {
         custom: { rpm: 60, rpd: 1000 }
       },
 
+      autoAnswer: {
+        // Off by default: it spends the user's quota without them pressing anything.
+        enabled: false,
+        threshold: 0.7,
+        debounceMs: 700,
+        cooldownMs: 12000,
+        maxPerMinute: 4,
+        // Start on the interim transcript, cancel if the final diverges. Costs extra requests.
+        speculative: false
+      },
+
       sessions: {
         // 'forever' | 'days' | 'never'
         retention: 'forever',

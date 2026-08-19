@@ -66,6 +66,7 @@ export default function SettingsModal({ isOpen, onClose, sidecar }) {
         llm: JSON.parse(JSON.stringify(data.llm)),
         stt: JSON.parse(JSON.stringify(data.stt)),
         rateLimits: JSON.parse(JSON.stringify(data.rateLimits)),
+        autoAnswer: JSON.parse(JSON.stringify(data.autoAnswer)),
         sessions: JSON.parse(JSON.stringify(data.sessions)),
         transcript: JSON.parse(JSON.stringify(data.transcript))
       });
@@ -165,6 +166,7 @@ export default function SettingsModal({ isOpen, onClose, sidecar }) {
           engineKeys: collectKeys('sttEngine', sttEngines.map((e) => e.id))
         },
         rateLimits: draft.rateLimits,
+        autoAnswer: draft.autoAnswer,
         sessions: draft.sessions,
         transcript: draft.transcript
       };
@@ -329,6 +331,72 @@ export default function SettingsModal({ isOpen, onClose, sidecar }) {
 
           {tab === 'limits' && (
             <>
+            <div className="setting-group">
+              <label className="setting-label">Auto-answer</label>
+              <p className="setting-hint">
+                Off by default. When armed, detected questions are answered without a hotkey —
+                which spends your quota on its own. Manual presses always win.
+              </p>
+              <label className="checkbox-row">
+                <input
+                  type="checkbox"
+                  checked={!!draft.autoAnswer.enabled}
+                  onChange={(e) => setDraft((d) => ({
+                    ...d, autoAnswer: { ...d.autoAnswer, enabled: e.target.checked }
+                  }))}
+                />
+                <span>Answer detected questions automatically</span>
+              </label>
+              <label className="checkbox-row">
+                <input
+                  type="checkbox"
+                  checked={!!draft.autoAnswer.speculative}
+                  onChange={(e) => setDraft((d) => ({
+                    ...d, autoAnswer: { ...d.autoAnswer, speculative: e.target.checked }
+                  }))}
+                />
+                <span>Start answering before the question finishes (costs extra requests)</span>
+              </label>
+              <div className="limit-row">
+                <span className="limit-name">Confidence to fire</span>
+                <label className="limit-input">
+                  <span>0-1</span>
+                  <input
+                    type="number" min="0.1" max="1" step="0.05"
+                    value={draft.autoAnswer.threshold}
+                    onChange={(e) => setDraft((d) => ({
+                      ...d,
+                      autoAnswer: { ...d.autoAnswer, threshold: Math.min(1, Math.max(0.1, Number(e.target.value) || 0.7)) }
+                    }))}
+                  />
+                </label>
+              </div>
+              <div className="limit-row">
+                <span className="limit-name">Pacing</span>
+                <label className="limit-input">
+                  <span>cooldown s</span>
+                  <input
+                    type="number" min="0"
+                    value={Math.round(draft.autoAnswer.cooldownMs / 1000)}
+                    onChange={(e) => setDraft((d) => ({
+                      ...d,
+                      autoAnswer: { ...d.autoAnswer, cooldownMs: Math.max(0, Number(e.target.value) || 0) * 1000 }
+                    }))}
+                  />
+                </label>
+                <label className="limit-input">
+                  <span>max/min</span>
+                  <input
+                    type="number" min="1"
+                    value={draft.autoAnswer.maxPerMinute}
+                    onChange={(e) => setDraft((d) => ({
+                      ...d,
+                      autoAnswer: { ...d.autoAnswer, maxPerMinute: Math.max(1, Number(e.target.value) || 1) }
+                    }))}
+                  />
+                </label>
+              </div>
+            </div>
             <div className="setting-group">
               <label className="setting-label">Transcript window</label>
               <p className="setting-hint">
