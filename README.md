@@ -1,231 +1,147 @@
 # Sidecar
 
-### A minimal, dark glassmorphic desktop overlay copilot that floats on top of your windows. It captures screen details, transcribes mic/system dialogue, and streams real-time AI suggestions while staying hidden from screen captures.
+A desktop overlay copilot for live calls and interviews. It listens to both sides of a conversation,
+watches your screen when you ask it to, and streams answers into a transparent panel that floats
+above everything else.
 
-![Sidecar Overlay](docs/overlay.png)
+Open source, MIT, bring your own API key. **There is no backend.** Everything runs on your machine
+against your own keys — see [PRIVACY.md](PRIVACY.md) for exactly what goes where.
 
-> [!WARNING]
-> **Use responsibly.** Sidecar's screen-share invisibility is best-effort, not guaranteed — some capture tools and phone cameras can still see it. Do not use this to violate exam proctoring rules, interview integrity, or any platform's terms of service. It's built for **personal practice, accessibility, and studying** — how you use it is your responsibility.
+![The Sidecar overlay](docs/overlay.png)
 
----
+> [!IMPORTANT]
+> Using this in an interview or exam may violate the rules you agreed to. That is your call to make,
+> and your consequence to carry. Recording other people may also require their consent where you
+> live. This project does not work on evading detection.
 
-## Download
+## What it does
 
-| Platform | File |
-|---|---|
-| macOS (Apple Silicon) | [Sidecar-mac-arm64.dmg](https://github.com/sohan-a11y/sidecar/releases/download/v1.0.1/Sidecar-mac-arm64.dmg) |
-| Windows (x64) | [Sidecar-Setup-1.0.1.exe](https://github.com/sohan-a11y/sidecar/releases/download/v1.0.1/Sidecar-Setup-1.0.1.exe) |
+- **Hears both sides.** Microphone and system-loopback audio are transcribed on separate channels,
+  so the transcript knows who said what.
+- **Answers from your actual background.** Drop in your résumé; Sidecar distils it into a profile
+  and a bank of STAR stories, and answers are grounded in them. It is instructed never to invent an
+  employer, a project, or a metric you do not have.
+- **Watches your screen when asked.** Assist and Solve-code attach a screenshot. You choose the
+  monitor, window, or a dragged-out region.
+- **Speaks in points, not paragraphs.** The default answer shape is 3–5 short bullets, because
+  nobody can read prose while talking.
+- **Optionally answers on its own.** Auto-answer detects a question from the other side and responds
+  without a hotkey. Off by default, and interlocked so it cannot drain a free tier.
+- **Keeps a record.** Every session saves its transcript and answers, exportable to Markdown, text,
+  or JSON, with a retention setting including "never persist".
 
-> [!NOTE]
-> **Windows:** The installer is not code-signed. Windows SmartScreen may display an "unrecognized app" warning — click **"More info"** → **"Run anyway"** to proceed.
+## Honest limitations
 
-## ⚠️ Disclaimer — Please Read Before Use
+- Answers are only as good as the model you point it at. On a free text-only model, screenshots are
+  dropped and answers are generic.
+- Transcription quality drops with cheap microphones, crosstalk, and heavy accents. The batch engine
+  adds a second or two of latency by design; the streaming engines are faster but need their own key.
+- The streaming transcription adapters (Deepgram, AssemblyAI, OpenAI Realtime) are written to each
+  vendor's documented protocol but have not been exercised against a live account by the maintainer.
+  Reports welcome.
+- Content protection hides the window from screen capture on Windows 10 build 19041+ and on macOS.
+  On older Windows it becomes a black rectangle. It is a convenience, not a guarantee.
+- Linux system-audio loopback depends on your PipeWire/PulseAudio setup and is the least tested path.
+- There is no renderer test suite. Visual regressions are caught by looking.
 
-**Sidecar's screen-invisibility is best-effort, not guaranteed.** It relies on OS-level Content Protection APIs (`setContentProtection`) and window-level flags that work with most built-in screen sharing and recording tools (Zoom, Google Meet, Microsoft Teams, QuickTime, OBS window-capture). However, some capture methods — including phone cameras pointed at your screen, certain third-party proctoring software, HDMI capture cards, and full-display OBS captures — **can still see the overlay.** Do not rely on invisibility as a certainty.
+## Install
 
-**This tool is intended exclusively for legitimate, ethical purposes:**
-- Personal study and self-practice (e.g., reviewing flashcards, drilling problems solo)
-- Accessibility assistance (e.g., real-time captioning, cognitive aids)
-- Professional productivity during your own solo work
-- Learning and experimentation with AI-assisted workflows
-
-**You must NOT use Sidecar to:**
-- Cheat on proctored exams, certifications, or academic assessments
-- Gain an unfair advantage during job interviews or hiring screens
-- Violate any platform's Terms of Service or community guidelines
-- Record, transcribe, or surveil others without their knowledge and consent, in violation of applicable privacy or wiretapping laws
-
-**You are solely responsible for how you use this software.** The developer(s) provide it as-is and accept no liability for misuse. By using Sidecar, you agree to comply with all applicable laws, institutional policies, and platform rules in your jurisdiction.
-
----
-
-## What It Does
-
-| Feature / Shortcut | macOS | Windows | Description |
-|---|---|---|---|
-| **General Assist** | `⌘` `Enter` / `⌘` `G` / `⌘` `Shift` `Space` | `Ctrl` `Enter` / `Ctrl` `G` / `Ctrl` `Shift` `Space` | Captures screen image + recent conversation transcript, sending them to the LLM for immediate direct assistance. |
-| **Solve Code** | `⌘` `H` | `Ctrl` `H` | Captures screen code, drafts solution strategy, prints clean solution block, and lists space/time complexities. |
-| **Quit App** | `⌘` `Shift` `X` | `Ctrl` `Shift` `X` | Instantly terminates the app, closes overlays, and unregisters all global keyboard hooks. |
-| **Draft Reply** | — | — | Uses recent dialog turns to draft a natural first-person conversational response. |
-| **Summarize** | — | — | Compiles ongoing meeting/dialog notes into action items and summaries. |
-| **Follow-up Questions** | — | — | Formulates 3 momentum-driving questions to keep conversation active. |
-| **Ask Anything** | — | — | Allows typing custom prompts into the composer to query context. |
-
----
-
-## Setup & Installation
-
-### Prerequisites
-
-- **Node.js**: v18 or later (v20+ recommended)
-- **npm**: Included with Node.js
-- **Git**: To clone the repository
-
-### 1. Clone & Install
+Download the latest Windows installer from
+[Releases](https://github.com/sohan-a11y/sidecar/releases), or run from source:
 
 ```bash
 git clone https://github.com/sohan-a11y/sidecar.git
 cd sidecar
 npm install
+npm run build
+npm start
 ```
 
-### 2. Run in Development
+Node 20 or later. macOS and Linux run from source; only Windows has a packaged build today.
 
-To start the React + Vite renderer dev server:
-```bash
-npm run dev
-```
-In a separate terminal shell, launch the Electron wrapper:
-```bash
-NODE_ENV=development npm start        # macOS / Linux
-```
-```cmd
-set NODE_ENV=development && npm start  :: Windows (Command Prompt)
-```
-```powershell
-$env:NODE_ENV="development"; npm start # Windows (PowerShell)
-```
+## Setting up your keys
 
----
+Sidecar ships with no credentials and cannot work without at least one key of your own.
 
-## Build & Package
+1. Launch it and open **Settings** (the gear in the composer).
+2. **Models** — pick a chat provider, paste its key, and choose a model. The model list is fetched
+   live from the provider.
+3. **Speech** — pick a transcription engine. `Batch` reuses your OpenAI or Gemini key; the streaming
+   engines need their own.
+4. **Context** — drop in your résumé and press *Build profile*. Without this, answers are generic,
+   and the composer says so.
+5. Fill in the role, company, and job description for the session you are about to have.
 
-### macOS
+Keys are encrypted with your OS keychain (DPAPI, Keychain, libsecret) and are never sent to the
+app's own UI process, let alone anywhere else.
 
-To build and pack the native macOS `.app` bundle:
-```bash
-npm run pack
-```
-Locate the compiled bundle inside `dist/mac-arm64/Sidecar.app`. If macOS complains about ad-hoc local code signatures on first start, run:
-```bash
-xattr -cr /Applications/Sidecar.app
-```
+## Providers
 
-### Windows
+| Provider | Chat | Vision | Transcription | Notes |
+|---|:---:|:---:|:---:|---|
+| OpenAI | ✅ | ✅ | ✅ | `whisper-1` for batch, realtime models for streaming |
+| Anthropic | ✅ | ✅ | — | Prompt caching is used for the profile block |
+| Google Gemini | ✅ | ✅ | ✅ | Every `generateContent` model accepts images |
+| TokenRouter | ✅ | per model | — | Model list fetched live; free models preferred on fallback |
+| Custom (OpenAI-compatible) | ✅ | per model | ✅ | Ollama, LM Studio, vLLM, OpenRouter — you supply the base URL |
+| Deepgram | — | — | ✅ streaming | `multi` mode handles code-switched speech |
+| AssemblyAI | — | — | ✅ streaming | English-first |
 
-> [!NOTE]
-> **Sidecar has been actively tested on macOS.** The Windows build is provided via automated CI but has not yet been manually tested on a real Windows machine. If you run into any issues on Windows, please [open a GitHub Issue](https://github.com/sohan-a11y/sidecar/issues) with details (Windows version, error message/screenshot) so it can be fixed.
+Vision is tracked per model. If your chat model cannot accept images, Sidecar routes screenshots to
+a vision model you nominate, or drops the image and tells you — it never sends an image part to a
+model that will reject it.
 
-To build the Windows NSIS installer (`.exe`):
-```bash
-npm run pack:win
-```
+## Shortcuts
 
-> **Note:** Building Windows installers from macOS requires Wine and is unreliable. For reliable Windows builds, use a native Windows machine or the included GitHub Actions workflow (see below).
-
-The compiled installer will be located at:
-```
-dist/Sidecar Setup <version>.exe
-```
-
-#### Windows SmartScreen Warning
-
-Because Sidecar is **not code-signed**, Windows Defender SmartScreen will display an "unrecognized app" warning when you first run the installer or the application:
-
-1. Click **"More info"** in the SmartScreen dialog
-2. Click **"Run anyway"** to proceed with installation
-
-This warning is normal for unsigned applications and does not indicate malware. Proper code signing may be added in a future release.
-
-#### GitHub Actions (Recommended for Windows Builds)
-
-This repository includes a GitHub Actions workflow at `.github/workflows/build-windows.yml` that automatically builds Windows installers on a native `windows-latest` runner whenever a new version tag (e.g., `v1.0.0`) is pushed. The resulting `.exe` is uploaded as a release artifact.
-
-To trigger a build:
-```bash
-git tag v1.0.0
-git push origin v1.0.0
-```
-
----
-
-## First Launch & Onboarding
-
-Upon opening the application, you will be greeted by the onboarding guide containing active keyboard hotkeys.
-
-
-### macOS
-
-
-1. **System Permissions**: Go to `System Settings → Privacy & Security`. Grant **Microphone** and **Screen Recording** access to Sidecar.
-2. **Zoom Configuration**: To hide Sidecar in Zoom, open Zoom Settings, navigate to `Share Screen → Advanced`, and set **Screen capture mode** to `"Advanced capture with window filtering."`
-
-### Windows
-
-1. **Permissions**: Windows may prompt for microphone access on first use. Click **Allow** to enable voice capture features.
-2. **Content Protection (Important)**: Sidecar uses the Windows `WDA_EXCLUDEFROMCAPTURE` API to hide the overlay from screen captures and shares.
-   - **Windows 10 version 2004 (build 19041) or later**: Full invisibility. The overlay is completely hidden from screen capture tools, screen shares, and recording software.
-   - **Older Windows versions**: The overlay will appear as a **black rectangle** in captures rather than being fully invisible. This is a limitation of the older `WDA_MONITOR` API that Electron falls back to.
-   - Sidecar will display a one-time warning at startup if your Windows version does not support full content protection.
-3. **Screen Sharing**: Sidecar is automatically hidden from most screen-sharing tools (Zoom, Teams, Meet) on supported Windows versions. No additional configuration is needed.
-
----
-
-## Settings & API Keys Setup
-
-Click the gear icon in the composer overlay to configure your settings and model credentials.
-
-![Sidecar Settings](docs/zoom-setting.png)
-
-- Supports **OpenAI** (defaults: `gpt-4o-mini` / `gpt-4o`), **Anthropic** (`claude-3-5-haiku-latest` / `claude-3-5-sonnet-latest`), and **Google Gemini** (`gemini-2.5-flash-lite` / `gemini-2.5-flash`).
-- Supports the **Google Gemini free-tier** and stable `v1beta` endpoint versions.
-
----
-
-## How It Works (System Architecture)
-
-Sidecar uses a decoupled architecture with a secure main-renderer IPC channel bridge:
-
-```
-Main Process (Node.js/Electron)
-├── index.js (App lifecycle manager — platform-aware guards)
-├── WindowManager.js (Transparent overlay, content protection + Windows version check)
-├── SettingsManager.js (Reads/writes sidecar-data.json)
-├── MediaCapture.js (Orchestrates screenshots and audio buffers)
-├── TranscriptionService.js (Adapts OpenAI/Gemini audio transcripts)
-├── LlmService.js (Handles OpenAI, Anthropic, and Gemini text streams)
-├── ShortcutsManager.js (Registers global shortcut listeners — CommandOrControl)
-└── IpcRouter.js (IPC routing, background STT loop & model check)
-
-Preload Script (Bridge)
-└── index.js (Exposes contextBridge API: window.sidecar)
-
-Renderer Process (React + Vite)
-├── App.jsx (State coordinator)
-├── index.css (Custom CSS design system)
-└── components/ (React views: Header, Composer, Panels, Preferences)
-```
-
-1. **Loopback Audio Engine**: Buffers output audio (system speaker channel) and input audio (microphone channel) separately to run independent Whisper or Gemini STT APIs, keeping dialogue turns tagged correctly. Uses WASAPI loopback on Windows and CoreAudio on macOS.
-2. **Visual Content Protection**: The window manager flags the transparent overlay with OS content filters to mask the copilot panel from OBS, Zoom screen shares, or screenshots. On Windows, uses `WDA_EXCLUDEFROMCAPTURE` (Windows 10 2004+).
-
----
-
-## Troubleshooting & Tips
-
-### Google Gemini API 404 Errors
-If you configure a Gemini API key and receive `404 NOT_FOUND` errors, check that you are using active model versions.
-* **Auto-Fallback Check**: Sidecar runs a lightweight, non-blocking check on startup that queries `GET /v1beta/models`. If your configured model is deprecated or retired, it automatically upgrades to the first active Flash model and displays:
-  > `"Gemini model updated automatically — old model was retired."`
-* **API Version**: The app targets the `v1beta` endpoint version (`generativelanguage.googleapis.com/v1beta`) which supports newer Gemini 2.5 models.
-
-### Windows-Specific Issues
-
-| Issue | Solution |
+| Action | Default |
 |---|---|
-| SmartScreen blocks the installer | Click "More info" → "Run anyway". The app is not code-signed yet. |
-| Overlay visible in screen captures | Ensure you are running Windows 10 v2004+ (build 19041). Older versions use weaker protection. |
-| System audio not captured | Verify Electron 33+ is installed. WASAPI loopback requires Windows 10 or later. |
-| `Ctrl+H` opens browser history | This shortcut is intercepted by Electron's global shortcut system and should work. If it conflicts, ensure no other app is capturing it. |
+| Assist | `Ctrl/Cmd + Enter` |
+| Solve code on screen | `Ctrl/Cmd + H` |
+| Start listening and assist | `Ctrl/Cmd + G` |
+| Hide / show the overlay | `Ctrl/Cmd + Shift + H` |
+| Quit | `Ctrl/Cmd + Shift + X` |
 
----
+All remappable in **Settings → Screen**, with conflict detection.
 
-## Windows Icon
+## Architecture
 
-> **Note:** The current Windows icon (`docs/icon.ico`) is a placeholder. It should be replaced with a properly designed application icon before release. The icon is used by the NSIS installer and the Windows taskbar/title bar.
+```
+┌─────────────────────────────────────────────────────────────┐
+│ Renderer (React)                                            │
+│   App.jsx · transcript pane · settings · VAD segmenter      │
+└───────────────┬─────────────────────────────────────────────┘
+                │  IPC only (contextIsolation on, no node in renderer)
+┌───────────────┴─────────────────────────────────────────────┐
+│ Main (Electron)                                             │
+│                                                             │
+│  MediaCapture ──▶ TranscriptionService ──▶ stt/ adapters    │
+│                            │                 (ws sockets)   │
+│                            ▼                                │
+│                     SessionManager ◀── ContextStore         │
+│                            │                 │              │
+│                            ▼                 ▼              │
+│  QuestionDetector ──▶ PromptBuilder ──▶ LlmService          │
+│         │                                    │              │
+│    AutoAnswer                          RateLimiter          │
+│                                              ▼              │
+│                                       providers/ adapters   │
+└─────────────────────────────────────────────────────────────┘
+```
 
----
+Two rules hold the whole thing together: every model call goes through `RateLimiter.schedule()`, and
+every prompt is composed by `PromptBuilder.build()`. API keys never leave the main process.
 
-## License
+Decisions worth knowing about are recorded in [docs/adr/](docs/adr/). The phased build spec is in
+[docs/BUILD-PLAN.md](docs/BUILD-PLAN.md).
 
-Distributed under the **MIT License**. See `LICENSE` for details.
+## Contributing
+
+Read [CONTRIBUTING.md](CONTRIBUTING.md) first — it covers the dev setup, the phase model, and the
+handful of rules that will break the app if ignored. Security issues go through
+[SECURITY.md](SECURITY.md), privately.
+
+By participating you agree to the [Code of Conduct](CODE_OF_CONDUCT.md).
+
+## Licence
+
+MIT — see [LICENSE](LICENSE).
