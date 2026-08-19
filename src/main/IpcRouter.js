@@ -13,7 +13,7 @@ const RateLimiter = require('./RateLimiter');
 const Providers = require('./providers');
 const { isAbort } = require('./providers/util');
 
-const TRANSCRIPTION_INTERVAL_MS = 3500;
+const SttEngines = require('./stt');
 
 class IpcRouter {
   constructor() {
@@ -32,6 +32,7 @@ class IpcRouter {
     // Main-process modules report to the user through one channel.
     LlmService.onStatus = (message) => WindowManager.send('status', { message });
     TranscriptionService.onStatus = (message) => WindowManager.send('status', { message });
+    TranscriptionService.onResult = (result) => this.handleSttResult(result);
     RateLimiter.onChange = (snapshot) => WindowManager.send('usage', snapshot);
     ContextStore.onChange = (view) => WindowManager.send('context:changed', view);
     SessionManager.onChange = (state) => WindowManager.send('session:state', state);
@@ -52,6 +53,7 @@ class IpcRouter {
       LlmService.resetNotices();
       SettingsManager.set(patch);
       this.applyRateLimits();
+      TranscriptionService.reset();
       this.validateConfiguredModels();
       return SettingsManager.publicView();
     });
@@ -62,9 +64,9 @@ class IpcRouter {
       const active = MediaCapture.toggleListening(state);
       if (active) {
         SessionManager.start();
-        this.startTranscriptionLoop();
+        TranscriptionService.start();
       } else {
-        this.stopTranscriptionLoop();
+        TranscriptionService.stop();
       }
       WindowManager.send('capture:state', { active });
       return active;
@@ -72,7 +74,21 @@ class IpcRouter {
 
     // 3. Audio chunks from the renderer (16 kHz mono Int16 PCM)
     ipcMain.on('sidecar:audio-chunk', (_event, { source, arrayBuffer }) => {
-      MediaCapture.appendAudioChunk(source, arrayBuffer);
+      const buffer = MediaCapture.appendAudioChunk(source, arrayBuffer);
+      if (buffer) TranscriptionService.pushAudio(source, buffer);
+    });
+
+    // Speech boundaries from the renderer's VAD drive batch transcription.
+    ipcMain.on('sidecar:vad', (_event, { source, state }) => {
+      if (state === 'start') {
+        MediaCapture.clearChannel(source);
+        return;
+      }
+      if (state === 'abort') {
+        MediaCapture.clearChannel(source);
+        return;
+      }
+      if (state === 'end') this.transcribeSegment(source);
     });
 
     // 4. Run a mode (trigger an LLM task)
@@ -105,6 +121,8 @@ class IpcRouter {
         return { ok: false, models: [], error: e.message };
       }
     });
+
+    ipcMain.handle('sidecar:stt:engines', () => SttEngines.list());
 
     // 9. Rate-limit budget snapshot
     ipcMain.handle('sidecar:usage:get', () => RateLimiter.snapshot());
@@ -318,41 +336,37 @@ class IpcRouter {
     return ids[0];
   }
 
-  startTranscriptionLoop() {
-    if (this.transcriptionTimer) return;
-    this.transcriptionTimer = setInterval(() => {
-      this.processTranscription('user');
-      this.processTranscription('system');
-    }, TRANSCRIPTION_INTERVAL_MS);
+  /** Streaming results arrive here; interim turns replace the open one on that channel. */
+  handleSttResult({ channel, text, isFinal, startMs, endMs, confidence }) {
+    if (!text || !text.trim()) return;
+    const turn = SessionManager.upsertTurn({
+      sender: channel === 'user' ? 'user' : 'system',
+      channel,
+      text: text.trim(),
+      timestamp: Date.now(),
+      interim: !isFinal,
+      startMs,
+      endMs,
+      confidence
+    });
+    WindowManager.send('transcript', turn);
   }
 
-  stopTranscriptionLoop() {
-    if (this.transcriptionTimer) {
-      clearInterval(this.transcriptionTimer);
-      this.transcriptionTimer = null;
-    }
-  }
-
-  async processTranscription(source) {
+  /** One VAD-delimited utterance, batch engine only. */
+  async transcribeSegment(source) {
+    if (TranscriptionService.isStreaming()) return;
     if (this.transcriptionBusy[source]) return;
+
     const pcm = MediaCapture.getAndFlushAudio(source);
     if (!pcm || pcm.length === 0) return;
 
     this.transcriptionBusy[source] = true;
     try {
-      const text = await TranscriptionService.transcribe(pcm, source);
+      const text = await TranscriptionService.transcribeSegment(pcm, source);
       if (text && text.trim()) {
-        const turn = SessionManager.upsertTurn({
-          sender: source === 'user' ? 'user' : 'system',
-          channel: source,
-          text: text.trim(),
-          timestamp: Date.now(),
-          interim: false
-        });
-        WindowManager.send('transcript', turn);
+        this.handleSttResult({ channel: source, text, isFinal: true });
       }
     } catch (e) {
-      // Configuration problems are worth telling the user about, once.
       if (e.code === 'STT_NOT_READY' || e.code === 'RATE_LIMIT_DAILY') {
         if (!this.sttErrorShown) {
           this.sttErrorShown = true;
@@ -437,10 +451,18 @@ class IpcRouter {
     }
   }
 
+  shutdown() {
+    TranscriptionService.stop();
+    if (SessionManager.isActive()) SessionManager.persist(true);
+  }
+
   ensureListeningAndAssist() {
     if (!MediaCapture.isListening) {
       const active = MediaCapture.toggleListening(true);
-      if (active) this.startTranscriptionLoop();
+      if (active) {
+        SessionManager.start();
+        TranscriptionService.start();
+      }
       WindowManager.send('capture:state', { active });
     }
     this.executeMode('assist', '');

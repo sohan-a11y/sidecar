@@ -41,11 +41,18 @@ class SettingsManager {
       },
 
       stt: {
+        // Transport: 'batch' uploads a VAD-delimited utterance, the rest stream over a socket.
+        engine: 'batch',
+        // Per channel, so a call can be Hindi one way and English the other.
+        languages: { user: 'auto', system: 'auto' },
+        // Batch mode only: which provider does the upload.
         provider: 'openai',
-        language: 'auto',
         baseUrl: '',
         models: { openai: 'whisper-1', gemini: 'gemini-2.5-flash', custom: 'whisper-1' },
-        apiKeys: { openai: '', gemini: '', custom: '' }
+        apiKeys: { openai: '', gemini: '', custom: '' },
+        // Streaming engines carry their own keys and models.
+        engineKeys: { deepgram: '', assemblyai: '', openaiRealtime: '' },
+        engineModels: { deepgram: 'nova-3', assemblyai: 'universal-streaming', openaiRealtime: 'gpt-4o-mini-transcribe' }
       },
 
       // Free tiers cap requests/minute and requests/day; defaults are deliberately conservative.
@@ -137,8 +144,9 @@ class SettingsManager {
         visionOverrides: {}
       },
       stt: {
+        engine: 'batch',
         provider: sttProvider,
-        language: 'auto',
+        languages: { user: 'auto', system: 'auto' },
         baseUrl: '',
         models: this.clone(this.defaults.stt.models),
         apiKeys: {
@@ -154,6 +162,7 @@ class SettingsManager {
   unsealKeys() {
     this.settings.llm.apiKeys = KeyStore.openMap(this.settings.llm.apiKeys);
     this.settings.stt.apiKeys = KeyStore.openMap(this.settings.stt.apiKeys);
+    this.settings.stt.engineKeys = KeyStore.openMap(this.settings.stt.engineKeys);
   }
 
   save() {
@@ -161,6 +170,7 @@ class SettingsManager {
       const onDisk = this.clone(this.settings);
       onDisk.llm.apiKeys = KeyStore.sealMap(this.settings.llm.apiKeys);
       onDisk.stt.apiKeys = KeyStore.sealMap(this.settings.stt.apiKeys);
+      onDisk.stt.engineKeys = KeyStore.sealMap(this.settings.stt.engineKeys);
       fs.writeFileSync(this.filePath, JSON.stringify(onDisk, null, 2), 'utf8');
     } catch (e) {
       console.error('[SettingsManager] Failed to save settings:', e.message);
@@ -181,9 +191,11 @@ class SettingsManager {
     const view = this.clone(s);
     view.llm.apiKeys = this.blankKeys(s.llm.apiKeys);
     view.stt.apiKeys = this.blankKeys(s.stt.apiKeys);
+    view.stt.engineKeys = this.blankKeys(s.stt.engineKeys);
     view.keyPresence = {
       llm: this.presence(s.llm.apiKeys),
-      stt: this.presence(s.stt.apiKeys)
+      stt: this.presence(s.stt.apiKeys),
+      sttEngine: this.presence(s.stt.engineKeys)
     };
     view.encryptionAvailable = KeyStore.available();
     view.providers = Providers.list();
@@ -210,19 +222,19 @@ class SettingsManager {
     const cleaned = this.clone(patch || {});
     const keyUpdates = [];
 
-    for (const section of ['llm', 'stt']) {
-      const keys = cleaned[section] && cleaned[section].apiKeys;
+    for (const [section, field] of [['llm', 'apiKeys'], ['stt', 'apiKeys'], ['stt', 'engineKeys']]) {
+      const keys = cleaned[section] && cleaned[section][field];
       if (!keys) continue;
       for (const [providerId, value] of Object.entries(keys)) {
         if (value === '' || value === undefined) continue;
-        keyUpdates.push([section, providerId, value === null ? '' : String(value)]);
+        keyUpdates.push([section, field, providerId, value === null ? '' : String(value)]);
       }
-      delete cleaned[section].apiKeys;
+      delete cleaned[section][field];
     }
 
     this.settings = this.mergeDeep(this.settings, cleaned);
-    for (const [section, providerId, value] of keyUpdates) {
-      this.settings[section].apiKeys[providerId] = value;
+    for (const [section, field, providerId, value] of keyUpdates) {
+      this.settings[section][field][providerId] = value;
     }
 
     this.save();
@@ -253,8 +265,10 @@ class SettingsManager {
       },
       stt: {
         provider: sttProvider,
+        engine: s.stt.engine || 'batch',
         model: (s.stt.models || {})[sttProvider] || '',
-        language: s.stt.language || 'auto',
+        languages: s.stt.languages || { user: 'auto', system: 'auto' },
+        language: (s.stt.languages && s.stt.languages.system) || 'auto',
         baseUrl: s.stt.baseUrl || '',
         apiKey: (s.stt.apiKeys || {})[sttProvider] || ''
       },
