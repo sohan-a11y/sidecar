@@ -1,5 +1,5 @@
 const { Anthropic } = require('@anthropic-ai/sdk');
-const { parseDataUrl, guessVision } = require('./util');
+const { parseDataUrl, guessVision, systemToAnthropicBlocks } = require('./util');
 
 // The installed SDK (0.32) has no models.list, so the model list comes from REST.
 const MODELS_URL = 'https://api.anthropic.com/v1/models?limit=100';
@@ -66,11 +66,14 @@ const adapter = {
       }
     }
 
+    // Blocks marked cacheable carry cache_control, so a stable profile prefix is
+    // re-used across a whole session instead of being re-read every turn.
+    const systemBlocks = systemToAnthropicBlocks(system);
     const stream = await client.messages.create(
       {
         model,
         max_tokens: 1024,
-        ...(system ? { system } : {}),
+        ...(systemBlocks ? { system: systemBlocks } : {}),
         messages: composed,
         stream: true
       },

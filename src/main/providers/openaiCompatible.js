@@ -1,6 +1,6 @@
 const { OpenAI } = require('openai');
 const fs = require('fs');
-const { attachImagesOpenAi, visionFromModelRecord, withTempWav } = require('./util');
+const { attachImagesOpenAi, visionFromModelRecord, withTempWav, systemToText } = require('./util');
 
 /**
  * Generic OpenAI Chat-Completions adapter, parameterised by base URL.
@@ -91,8 +91,9 @@ function createOpenAiCompatible(config) {
 
     async streamChat({ apiKey, model, system, messages, images, signal, baseUrl }, onToken) {
       const client = adapter.client(apiKey, baseUrl);
+      const systemText = systemToText(system);
       const composed = [
-        ...(system ? [{ role: 'system', content: system }] : []),
+        ...(systemText ? [{ role: 'system', content: systemText }] : []),
         ...attachImagesOpenAi(messages, images)
       ];
 
