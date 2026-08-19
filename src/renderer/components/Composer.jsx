@@ -1,6 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 
-export default function Composer({ userText, setUserText, isSmart, onToggleSmart, onOpenSettings, onSubmit, usage, hasProfile }) {
+export default function Composer({ userText, setUserText, isSmart, onToggleSmart, onOpenSettings, onSubmit, usage, hasProfile, isStreaming, isQueued, onStop, onRegenerate, onNewThread, canRegenerate }) {
   const textareaRef = useRef(null);
 
   useEffect(() => {
@@ -89,15 +89,60 @@ export default function Composer({ userText, setUserText, isSmart, onToggleSmart
           </span>
         )}
 
+        {canRegenerate && !isStreaming && (
+          <div className="regen-group">
+            <button type="button" className="link-btn" onClick={() => onRegenerate()} title="Run that again">
+              Retry
+            </button>
+            <select
+              className="regen-select"
+              defaultValue=""
+              title="Retry with a different answer shape"
+              onChange={(e) => {
+                if (e.target.value) onRegenerate(e.target.value);
+                e.target.value = '';
+              }}
+            >
+              <option value="" disabled>as…</option>
+              <option value="speak-points">speaking points</option>
+              <option value="brief">brief</option>
+              <option value="detailed">detailed</option>
+              <option value="code">code</option>
+            </select>
+          </div>
+        )}
+
+        {isQueued && <span className="queue-pill">queued</span>}
+
         <div className="spacer"></div>
         
-        <button 
-          className="composer-send-btn" 
-          title="Submit Prompt"
-          onClick={onSubmit}
+        <button
+          type="button"
+          className="link-btn"
+          title="Start a fresh thread — follow-ups stop referring to earlier answers"
+          onClick={onNewThread}
         >
-          {sendIcon}
+          New thread
         </button>
+
+        {isStreaming ? (
+          <button
+            type="button"
+            className="composer-stop-btn"
+            title="Stop generating"
+            onClick={onStop}
+          >
+            <span className="stop-square"></span>
+          </button>
+        ) : (
+          <button 
+            className="composer-send-btn" 
+            title="Submit Prompt"
+            onClick={onSubmit}
+          >
+            {sendIcon}
+          </button>
+        )}
       </div>
     </div>
   );
