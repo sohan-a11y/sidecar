@@ -7,7 +7,7 @@ follows.
 ## Getting set up
 
 ```bash
-git clone https://github.com/sohan-a11y/sidecar.git
+git clone https://github.com/Ganeshp000/sidecar.git
 cd sidecar
 npm install
 ```

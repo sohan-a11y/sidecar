@@ -31,7 +31,11 @@ function boot() {
       dialog: { showSaveDialog: () => Promise.resolve({ canceled: true }) }
     }
   };
-  for (const mod of ['../src/main/IpcRouter.js', '../src/main/SettingsManager.js', '../src/main/KeyStore.js']) {
+  for (const mod of [
+    '../src/main/IpcRouter.js',
+    '../src/main/SettingsManager.js',
+    '../src/main/KeyStore.js'
+  ]) {
     delete require.cache[require.resolve(mod)];
   }
   IpcRouter = require('../src/main/IpcRouter.js');
@@ -43,8 +47,14 @@ describe('IpcRouter.pickFallbackModel — gemini', () => {
   beforeEach(() => boot());
 
   it('prefers a -latest alias over a pinned id still present in the list', () => {
-    const models = asModels(['gemini-2.5-flash-lite', 'gemini-flash-lite-latest', 'gemini-2.5-pro']);
-    expect(IpcRouter.pickFallbackModel('gemini', models, 'standard')).toBe('gemini-flash-lite-latest');
+    const models = asModels([
+      'gemini-2.5-flash-lite',
+      'gemini-flash-lite-latest',
+      'gemini-2.5-pro'
+    ]);
+    expect(IpcRouter.pickFallbackModel('gemini', models, 'standard')).toBe(
+      'gemini-flash-lite-latest'
+    );
   });
 
   it('picks the flash alias for the advanced slot over the lite alias', () => {
@@ -60,6 +70,8 @@ describe('IpcRouter.pickFallbackModel — gemini', () => {
   it('does not pick a lite alias for the flash-only advanced slot', () => {
     const models = asModels(['gemini-flash-lite-latest', 'gemini-2.5-pro']);
     // No flash alias/pinned id at all: advanced falls back to lite, then to the first id.
-    expect(IpcRouter.pickFallbackModel('gemini', models, 'advanced')).toBe('gemini-flash-lite-latest');
+    expect(IpcRouter.pickFallbackModel('gemini', models, 'advanced')).toBe(
+      'gemini-flash-lite-latest'
+    );
   });
 });
