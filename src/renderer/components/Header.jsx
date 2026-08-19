@@ -1,6 +1,6 @@
 import React from 'react';
 
-export default function Header({ isListening, onToggleListening, isCollapsed, onToggleCollapse, onOpenOnboarding, statusMessage, session, onEndSession }) {
+export default function Header({ isListening, onToggleListening, isCollapsed, onToggleCollapse, onOpenOnboarding, statusMessage, session, onEndSession, autoAnswer, onToggleAutoAnswer }) {
   
   const logoSvg = (
     <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -27,6 +27,18 @@ export default function Header({ isListening, onToggleListening, isCollapsed, on
           <span className="arrow-icon"></span>
           <span>{isCollapsed ? 'Show' : 'Hide'}</span>
         </button>
+        <div className="tb-divider"></div>
+        <button
+          className={`tb-auto-btn ${autoAnswer ? 'active' : ''}`}
+          title={autoAnswer
+            ? 'Auto-answer is ON — detected questions are answered without a hotkey'
+            : 'Auto-answer is off. Questions are only answered when you press a hotkey.'}
+          onClick={onToggleAutoAnswer}
+        >
+          <span className="auto-dot"></span>
+          <span>Auto</span>
+        </button>
+
         {session && session.active && (
           <>
             <div className="tb-divider"></div>

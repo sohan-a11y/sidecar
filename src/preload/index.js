@@ -14,7 +14,8 @@ const ALLOWED_EVENTS = [
   'settings:changed',
   'context:changed',
   'context:progress',
-  'session:state'
+  'session:state',
+  'auto-answer:fired'
 ];
 
 contextBridge.exposeInMainWorld('sidecar', {
@@ -52,6 +53,10 @@ contextBridge.exposeInMainWorld('sidecar', {
   sendAudioChunk: (source, arrayBuffer) => ipcRenderer.send('sidecar:audio-chunk', { source, arrayBuffer }),
   sendVadState: (source, state) => ipcRenderer.send('sidecar:vad', { source, state }),
   listSttEngines: () => ipcRenderer.invoke('sidecar:stt:engines'),
+  autoAnswer: {
+    get: () => ipcRenderer.invoke('sidecar:auto-answer:get'),
+    toggle: (enabled) => ipcRenderer.invoke('sidecar:auto-answer:toggle', enabled)
+  },
   setMouseIgnore: (ignore) => ipcRenderer.send('sidecar:mouse-ignore', ignore),
   openUrl: (url) => ipcRenderer.send('sidecar:open-url', url),
   log: (msg) => ipcRenderer.send('sidecar:log', msg),
