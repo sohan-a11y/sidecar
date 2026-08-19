@@ -125,7 +125,9 @@ class IpcRouter {
 
     // 6. External URL
     ipcMain.on('sidecar:open-url', (_event, url) => {
-      shell.openExternal(url).catch((err) => console.error('[IpcRouter] Open URL failed:', err.message));
+      shell
+        .openExternal(url)
+        .catch((err) => console.error('[IpcRouter] Open URL failed:', err.message));
     });
 
     // 7. Renderer logging
@@ -167,7 +169,8 @@ class IpcRouter {
       // Drop the previous answer from the thread so the retry replaces it.
       if (this.thread.length && this.thread[this.thread.length - 1].role === 'assistant') {
         this.thread.pop();
-        if (this.thread.length && this.thread[this.thread.length - 1].role === 'user') this.thread.pop();
+        if (this.thread.length && this.thread[this.thread.length - 1].role === 'user')
+          this.thread.pop();
       }
       WindowManager.send('llm:replace-last', {});
       this.executeMode(mode, userText, { preset });
@@ -231,7 +234,9 @@ class IpcRouter {
       return { bindings: SettingsManager.get().shortcuts, conflicts };
     });
 
-    ipcMain.handle('sidecar:shortcuts:probe', (_event, accelerator) => ShortcutsManager.probe(accelerator));
+    ipcMain.handle('sidecar:shortcuts:probe', (_event, accelerator) =>
+      ShortcutsManager.probe(accelerator)
+    );
 
     ipcMain.on('sidecar:thread:new', () => {
       this.thread = [];
@@ -247,7 +252,10 @@ class IpcRouter {
     ipcMain.handle('sidecar:context:ingest', async (_event, { name, bytes }) => {
       try {
         const doc = await ContextStore.ingest(name, Buffer.from(bytes));
-        return { ok: true, document: { id: doc.id, filename: doc.filename, chars: doc.text.length } };
+        return {
+          ok: true,
+          document: { id: doc.id, filename: doc.filename, chars: doc.text.length }
+        };
       } catch (e) {
         return { ok: false, error: e.message };
       }
@@ -260,9 +268,8 @@ class IpcRouter {
 
     ipcMain.handle('sidecar:context:distill', async () => {
       try {
-        const profile = await ProfileBuilder.distill(
-          ContextStore.rawText(),
-          (stage) => WindowManager.send('context:progress', { stage })
+        const profile = await ProfileBuilder.distill(ContextStore.rawText(), (stage) =>
+          WindowManager.send('context:progress', { stage })
         );
         ContextStore.setProfile(profile);
         return { ok: true, profile };
@@ -299,7 +306,10 @@ class IpcRouter {
     // 11. Sessions
     ipcMain.handle('sidecar:session:state', () => SessionManager.state());
     ipcMain.handle('sidecar:session:transcript', () => SessionManager.transcriptView());
-    ipcMain.handle('sidecar:session:start', (_event, title) => SessionManager.start(title) && SessionManager.state());
+    ipcMain.handle(
+      'sidecar:session:start',
+      (_event, title) => SessionManager.start(title) && SessionManager.state()
+    );
     ipcMain.handle('sidecar:session:end', () => {
       SessionManager.end();
       return SessionManager.state();
@@ -319,12 +329,14 @@ class IpcRouter {
     });
     ipcMain.handle('sidecar:session:open', (_event, id) => {
       const record = SessionManager.readFile(id);
-      return record ? { ok: true, session: record } : { ok: false, error: 'That session is no longer on disk.' };
+      return record
+        ? { ok: true, session: record }
+        : { ok: false, error: 'That session is no longer on disk.' };
     });
     ipcMain.handle('sidecar:session:export', async (_event, { id, format }) => {
       try {
         const contents = SessionManager.export(id, format);
-        const extension = format === 'json' ? 'json' : (format === 'txt' ? 'txt' : 'md');
+        const extension = format === 'json' ? 'json' : format === 'txt' ? 'txt' : 'md';
         const result = await dialog.showSaveDialog(WindowManager.getWindow(), {
           title: 'Export session',
           defaultPath: `${id}.${extension}`,
@@ -369,13 +381,16 @@ class IpcRouter {
     let out = '';
     await LlmService.stream(
       {
-        system: 'You maintain a running summary of a live conversation. Keep names, decisions, '
-          + 'numbers and anything the user was asked to follow up on. Drop small talk. '
-          + 'Write plain prose, no headings, no preamble.',
+        system:
+          'You maintain a running summary of a live conversation. Keep names, decisions, ' +
+          'numbers and anything the user was asked to follow up on. Drop small talk. ' +
+          'Write plain prose, no headings, no preamble.',
         messages: [{ role: 'user', content: instruction }],
         priority: 'auto'
       },
-      (token) => { out += token; }
+      (token) => {
+        out += token;
+      }
     );
     return out;
   }
@@ -415,7 +430,9 @@ class IpcRouter {
         if (!configured || available.has(configured)) continue;
         const replacement = this.pickFallbackModel(providerId, models, slot);
         if (!replacement || replacement === configured) continue;
-        console.log(`[IpcRouter] ${providerId} model "${configured}" is gone — using "${replacement}".`);
+        console.log(
+          `[IpcRouter] ${providerId} model "${configured}" is gone — using "${replacement}".`
+        );
         prefs[slot] = replacement;
         changed = true;
       }
@@ -439,8 +456,16 @@ class IpcRouter {
   pickFallbackModel(providerId, models, slot) {
     const ids = models.map((m) => m.id);
     if (providerId === 'gemini') {
-      const lite = ids.find((id) => id.toLowerCase().includes('flash-lite'));
-      const flash = ids.find((id) => id.toLowerCase().includes('flash') && !id.toLowerCase().includes('flash-lite'));
+      // Gemini's /v1beta/models list can still return a pinned id (e.g. gemini-2.5-flash)
+      // after Google has retired it for new callers -- generateContent then 404s even
+      // though the model passed this exact membership check. '-latest' aliases redirect
+      // server-side and don't go stale, so prefer one whenever the list offers it.
+      const isLite = (id) => id.toLowerCase().includes('flash-lite');
+      const isFlash = (id) => id.toLowerCase().includes('flash') && !isLite(id);
+      const preferAlias = (pred) =>
+        ids.find((id) => pred(id) && id.toLowerCase().endsWith('-latest')) || ids.find(pred);
+      const lite = preferAlias(isLite);
+      const flash = preferAlias(isFlash);
       if (slot === 'advanced') return flash || lite || ids[0];
       return lite || flash || ids[0];
     }
@@ -530,11 +555,15 @@ class IpcRouter {
     this.activeRequest = controller;
     this.activeRequestIsAuto = auto;
 
-    const userBubble = modeConfig.requiresScreen || mode === 'ask'
-      ? (userText || (mode === 'code' ? 'Analyze screen contents' : 'Assist'))
-      : null;
+    const userBubble =
+      modeConfig.requiresScreen || mode === 'ask'
+        ? userText || (mode === 'code' ? 'Analyze screen contents' : 'Assist')
+        : null;
 
-    WindowManager.send('llm:start', { userBubble, small: mode === 'questions' || mode === 'summarize' });
+    WindowManager.send('llm:start', {
+      userBubble,
+      small: mode === 'questions' || mode === 'summarize'
+    });
 
     try {
       const images = [];
@@ -545,10 +574,14 @@ class IpcRouter {
           const shot = await MediaCapture.capture({ force: !auto });
           if (shot.dataUrl) images.push(shot.dataUrl);
           else if (shot.unchanged) {
-            WindowManager.send('status', { message: 'Screen unchanged — answering without a new screenshot.' });
+            WindowManager.send('status', {
+              message: 'Screen unchanged — answering without a new screenshot.'
+            });
           }
         } catch (e) {
-          WindowManager.send('status', { message: 'Screen Recording permission is required for screenshot features.' });
+          WindowManager.send('status', {
+            message: 'Screen Recording permission is required for screenshot features.'
+          });
         }
       }
 

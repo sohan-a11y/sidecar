@@ -43,14 +43,16 @@ const SAMPLE_PROFILE = {
   headline: 'Backend engineer',
   yearsExperience: 7,
   skills: [{ name: 'Postgres', years: 5 }, 'Kafka'],
-  experience: [{
-    company: 'Acme',
-    title: 'Senior Engineer',
-    start: '2021',
-    end: 'present',
-    bullets: ['Rebuilt the ingestion pipeline'],
-    metrics: ['cut p99 latency 40%']
-  }],
+  experience: [
+    {
+      company: 'Acme',
+      title: 'Senior Engineer',
+      start: '2021',
+      end: 'present',
+      bullets: ['Rebuilt the ingestion pipeline'],
+      metrics: ['cut p99 latency 40%']
+    }
+  ],
   projects: [{ name: 'Shipyard', summary: 'deploy tool', stack: ['Go'], impact: 'daily releases' }],
   education: [{ school: 'State University', degree: 'BSc', field: 'CS', end: '2018' }],
   stories: [
@@ -80,7 +82,9 @@ describe('ContextStore', () => {
   afterEach(() => {
     try {
       fs.rmSync(tmpDir, { recursive: true, force: true });
-    } catch (e) { /* best effort */ }
+    } catch (e) {
+      /* best effort */
+    }
   });
 
   it('ingests plain text and markdown', async () => {
@@ -91,7 +95,9 @@ describe('ContextStore', () => {
   });
 
   it('extracts text from a real PDF', async () => {
-    const fixture = require.resolve('pdf-parse/package.json').replace('package.json', 'test/data/01-valid.pdf');
+    const fixture = require
+      .resolve('pdf-parse/package.json')
+      .replace('package.json', 'test/data/01-valid.pdf');
     if (!fs.existsSync(fixture)) {
       console.warn('[test] pdf-parse fixture missing; skipping PDF extraction check');
       return;
@@ -111,22 +117,32 @@ describe('ContextStore', () => {
       return;
     }
     const zip = new JSZip();
-    zip.file('[Content_Types].xml',
-      '<?xml version="1.0" encoding="UTF-8"?>'
-      + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
-      + '<Default Extension="xml" ContentType="application/xml"/>'
-      + '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>'
-      + '</Types>');
-    zip.folder('_rels').file('.rels',
-      '<?xml version="1.0" encoding="UTF-8"?>'
-      + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-      + '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>'
-      + '</Relationships>');
-    zip.folder('word').file('document.xml',
-      '<?xml version="1.0" encoding="UTF-8"?>'
-      + '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>'
-      + '<w:p><w:r><w:t>Senior Backend Engineer at Acme</w:t></w:r></w:p>'
-      + '</w:body></w:document>');
+    zip.file(
+      '[Content_Types].xml',
+      '<?xml version="1.0" encoding="UTF-8"?>' +
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+        '<Default Extension="xml" ContentType="application/xml"/>' +
+        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+        '</Types>'
+    );
+    zip
+      .folder('_rels')
+      .file(
+        '.rels',
+        '<?xml version="1.0" encoding="UTF-8"?>' +
+          '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+          '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>' +
+          '</Relationships>'
+      );
+    zip
+      .folder('word')
+      .file(
+        'document.xml',
+        '<?xml version="1.0" encoding="UTF-8"?>' +
+          '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>' +
+          '<w:p><w:r><w:t>Senior Backend Engineer at Acme</w:t></w:r></w:p>' +
+          '</w:body></w:document>'
+      );
 
     const buffer = await zip.generateAsync({ type: 'nodebuffer' });
     const doc = await ContextStore.ingest('resume.docx', buffer);
@@ -141,7 +157,9 @@ describe('ContextStore', () => {
   });
 
   it('refuses a document with no readable text', async () => {
-    await expect(ContextStore.ingest('empty.txt', Buffer.from('   \n  '))).rejects.toThrow(/No readable text/);
+    await expect(ContextStore.ingest('empty.txt', Buffer.from('   \n  '))).rejects.toThrow(
+      /No readable text/
+    );
   });
 
   it('normalises a messy profile instead of throwing', () => {
@@ -197,7 +215,9 @@ describe('PromptBuilder', () => {
   afterEach(() => {
     try {
       fs.rmSync(tmpDir, { recursive: true, force: true });
-    } catch (e) { /* best effort */ }
+    } catch (e) {
+      /* best effort */
+    }
   });
 
   it('puts stable context in system blocks and the transcript in the user turn', () => {
@@ -233,14 +253,19 @@ describe('PromptBuilder', () => {
 
   it('retrieves the story that matches the question', () => {
     const built = PromptBuilder.build('reply', {
-      transcript: [{ sender: 'system', text: 'Tell me about a time you disagreed with a colleague.' }]
+      transcript: [
+        { sender: 'system', text: 'Tell me about a time you disagreed with a colleague.' }
+      ]
     });
     expect(built.meta.storyTitles).toEqual(['Disagreeing with a staff engineer']);
     expect(built.messages[0].content).toContain('RELEVANT STORIES');
   });
 
   it('ranks tag matches above body matches', () => {
-    const stories = PromptBuilder.retrieveStories(ContextStore.getProfile(), 'database migration ownership');
+    const stories = PromptBuilder.retrieveStories(
+      ContextStore.getProfile(),
+      'database migration ownership'
+    );
     expect(stories[0].id).toBe('s1');
   });
 
@@ -290,7 +315,9 @@ describe('ProfileBuilder JSON parsing', () => {
   afterEach(() => {
     try {
       fs.rmSync(tmpDir, { recursive: true, force: true });
-    } catch (e) { /* best effort */ }
+    } catch (e) {
+      /* best effort */
+    }
   });
 
   it('reads a bare JSON object', () => {

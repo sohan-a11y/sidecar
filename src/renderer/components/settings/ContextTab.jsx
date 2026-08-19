@@ -8,12 +8,27 @@ const INTERVIEW_TYPES = [
   ['system-design', 'System design']
 ];
 
-const LENGTHS = [['brief', 'Brief'], ['normal', 'Normal'], ['detailed', 'Detailed']];
-const TONES = [['neutral', 'Neutral'], ['conversational', 'Conversational'], ['formal', 'Formal']];
+const LENGTHS = [
+  ['brief', 'Brief'],
+  ['normal', 'Normal'],
+  ['detailed', 'Detailed']
+];
+const TONES = [
+  ['neutral', 'Neutral'],
+  ['conversational', 'Conversational'],
+  ['formal', 'Formal']
+];
 const ANSWER_LANGUAGES = [
-  ['auto', 'Same as the question'], ['English', 'English'], ['Hindi', 'Hindi'],
-  ['Telugu', 'Telugu'], ['Tamil', 'Tamil'], ['Spanish', 'Spanish'], ['French', 'French'],
-  ['German', 'German'], ['Portuguese', 'Portuguese'], ['Japanese', 'Japanese']
+  ['auto', 'Same as the question'],
+  ['English', 'English'],
+  ['Hindi', 'Hindi'],
+  ['Telugu', 'Telugu'],
+  ['Tamil', 'Tamil'],
+  ['Spanish', 'Spanish'],
+  ['French', 'French'],
+  ['German', 'German'],
+  ['Portuguese', 'Portuguese'],
+  ['Japanese', 'Japanese']
 ];
 
 const ACCEPT = '.pdf,.docx,.txt,.md,.markdown';
@@ -85,7 +100,10 @@ export default function ContextTab({ sidecar, context, onContextChange, progress
 
         <div
           className={`drop-zone ${dragging ? 'is-dragging' : ''}`}
-          onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+          onDragOver={(e) => {
+            e.preventDefault();
+            setDragging(true);
+          }}
           onDragLeave={() => setDragging(false)}
           onDrop={handleDrop}
           onClick={() => fileInput.current && fileInput.current.click()}
@@ -106,9 +124,12 @@ export default function ContextTab({ sidecar, context, onContextChange, progress
           <ul className="doc-list">
             {documents.map((d) => (
               <li key={d.id} className="doc-row">
-                <span className="doc-name" title={d.preview}>{d.filename}</span>
+                <span className="doc-name" title={d.preview}>
+                  {d.filename}
+                </span>
                 <span className="doc-meta">
-                  {d.pages ? `${d.pages}p · ` : ''}{(d.chars / 1000).toFixed(1)}k chars
+                  {d.pages ? `${d.pages}p · ` : ''}
+                  {(d.chars / 1000).toFixed(1)}k chars
                   {d.truncated ? ' · truncated' : ''}
                 </span>
                 <button type="button" className="link-btn danger" onClick={() => removeDoc(d.id)}>
@@ -207,7 +228,11 @@ export default function ContextTab({ sidecar, context, onContextChange, progress
               value={session.interviewType}
               onChange={(e) => patchSession({ interviewType: e.target.value })}
             >
-              {INTERVIEW_TYPES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              {INTERVIEW_TYPES.map(([v, l]) => (
+                <option key={v} value={v}>
+                  {l}
+                </option>
+              ))}
             </select>
           </label>
 
@@ -218,7 +243,11 @@ export default function ContextTab({ sidecar, context, onContextChange, progress
               value={session.answerLength}
               onChange={(e) => patchSession({ answerLength: e.target.value })}
             >
-              {LENGTHS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              {LENGTHS.map(([v, l]) => (
+                <option key={v} value={v}>
+                  {l}
+                </option>
+              ))}
             </select>
           </label>
         </div>
@@ -231,7 +260,11 @@ export default function ContextTab({ sidecar, context, onContextChange, progress
               value={session.tone}
               onChange={(e) => patchSession({ tone: e.target.value })}
             >
-              {TONES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              {TONES.map(([v, l]) => (
+                <option key={v} value={v}>
+                  {l}
+                </option>
+              ))}
             </select>
           </label>
 
@@ -242,7 +275,11 @@ export default function ContextTab({ sidecar, context, onContextChange, progress
               value={session.answerLanguage}
               onChange={(e) => patchSession({ answerLanguage: e.target.value })}
             >
-              {ANSWER_LANGUAGES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              {ANSWER_LANGUAGES.map(([v, l]) => (
+                <option key={v} value={v}>
+                  {l}
+                </option>
+              ))}
             </select>
           </label>
         </div>

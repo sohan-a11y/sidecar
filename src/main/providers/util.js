@@ -28,7 +28,10 @@ async function withTempWav(wav, fn) {
       return os.tmpdir();
     }
   })();
-  const file = path.join(dir, `sidecar_stt_${Date.now()}_${Math.random().toString(36).slice(2, 11)}.wav`);
+  const file = path.join(
+    dir,
+    `sidecar_stt_${Date.now()}_${Math.random().toString(36).slice(2, 11)}.wav`
+  );
   fs.writeFileSync(file, wav);
   try {
     return await fn(file);
@@ -45,19 +48,49 @@ async function withTempWav(wav, fn) {
 // capability metadata of its own. Deliberately conservative: a false negative costs a
 // text-only answer, a false positive costs a hard API error mid-call.
 const VISION_PATTERNS = [
-  /gpt-4o/i, /gpt-4\.1/i, /gpt-4-turbo/i, /gpt-4-vision/i, /gpt-5/i, /chatgpt-4o/i,
-  /^o[34](-|$)/i, /\bo[34]-mini/i,
-  /claude-3/i, /claude-4/i, /claude-opus/i, /claude-sonnet/i, /claude-haiku/i,
+  /gpt-4o/i,
+  /gpt-4\.1/i,
+  /gpt-4-turbo/i,
+  /gpt-4-vision/i,
+  /gpt-5/i,
+  /chatgpt-4o/i,
+  /^o[34](-|$)/i,
+  /\bo[34]-mini/i,
+  /claude-3/i,
+  /claude-4/i,
+  /claude-opus/i,
+  /claude-sonnet/i,
+  /claude-haiku/i,
   /gemini/i,
-  /llava/i, /pixtral/i, /internvl/i, /minicpm-v/i, /molmo/i, /idefics/i, /fuyu/i,
-  /cogvlm/i, /glm-4v/i, /yi-vl/i, /deepseek-vl/i, /step-1v/i,
-  /-vl\b/i, /vision/i, /omni/i, /llama-3\.2-\d+b-vision/i, /llama-4/i, /grok-.*vision/i
+  /llava/i,
+  /pixtral/i,
+  /internvl/i,
+  /minicpm-v/i,
+  /molmo/i,
+  /idefics/i,
+  /fuyu/i,
+  /cogvlm/i,
+  /glm-4v/i,
+  /yi-vl/i,
+  /deepseek-vl/i,
+  /step-1v/i,
+  /-vl\b/i,
+  /vision/i,
+  /omni/i,
+  /llama-3\.2-\d+b-vision/i,
+  /llama-4/i,
+  /grok-.*vision/i
 ];
 
 // Beats the allowlist. Claude 3.5 Haiku matches /claude-haiku/ but is text-only.
 const TEXT_ONLY_PATTERNS = [
   /claude-3[.-]5-haiku/i,
-  /embed/i, /whisper/i, /tts/i, /moderation/i, /rerank/i, /-audio(-|$)/i
+  /embed/i,
+  /whisper/i,
+  /tts/i,
+  /moderation/i,
+  /rerank/i,
+  /-audio(-|$)/i
 ];
 
 /** Best-effort guess at whether a model id accepts images. */
@@ -86,9 +119,7 @@ function visionFromModelRecord(record, modelId) {
     record && Array.isArray(record.input_modalities)
       ? record.input_modalities.includes('image')
       : undefined,
-    record && Array.isArray(record.modalities)
-      ? record.modalities.includes('image')
-      : undefined
+    record && Array.isArray(record.modalities) ? record.modalities.includes('image') : undefined
   ];
   for (const value of candidates) {
     if (typeof value === 'boolean') return { vision: value, fromMetadata: true };

@@ -25,12 +25,18 @@ describe('RateLimiter', () => {
     limiter.now = () => clock;
 
     // First call consumes the only slot in the window.
-    const first = limiter.schedule('p', { priority: 'auto' }, async () => { order.push('auto1'); });
+    const first = limiter.schedule('p', { priority: 'auto' }, async () => {
+      order.push('auto1');
+    });
     await first;
 
     // These two queue behind the window; user must jump the earlier auto job.
-    const queuedAuto = limiter.schedule('p', { priority: 'auto' }, async () => { order.push('auto2'); });
-    const queuedUser = limiter.schedule('p', { priority: 'user' }, async () => { order.push('user1'); });
+    const queuedAuto = limiter.schedule('p', { priority: 'auto' }, async () => {
+      order.push('auto2');
+    });
+    const queuedUser = limiter.schedule('p', { priority: 'user' }, async () => {
+      order.push('user1');
+    });
 
     clock += 61 * 1000; // next minute window
     limiter.configure({ p: { rpm: 10, rpd: 10 } });

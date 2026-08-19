@@ -31,7 +31,10 @@ function headerValue(headers, name) {
 
 /** Retry-After is either delta-seconds or an HTTP date. Returns ms, or null. */
 function parseRetryAfter(err) {
-  const raw = headerValue(err && (err.headers || (err.response && err.response.headers)), 'retry-after');
+  const raw = headerValue(
+    err && (err.headers || (err.response && err.response.headers)),
+    'retry-after'
+  );
   if (!raw) return null;
   const seconds = Number(raw);
   if (Number.isFinite(seconds)) return Math.max(0, seconds * 1000);
@@ -49,7 +52,9 @@ function isRetryable(err) {
   if (status === 429) return true;
   if (status >= 500 && status < 600) return true;
   const code = err && err.code;
-  return code === 'ECONNRESET' || code === 'ETIMEDOUT' || code === 'ECONNREFUSED' || code === 'EPIPE';
+  return (
+    code === 'ECONNRESET' || code === 'ETIMEDOUT' || code === 'ECONNREFUSED' || code === 'EPIPE'
+  );
 }
 
 /**
@@ -160,10 +165,12 @@ class RateLimiter {
 
       if (this.usedToday(providerId) >= rpd) {
         bucket.queue.shift();
-        job.reject(new RateLimitError(
-          `Daily request limit reached for ${providerId} (${rpd}/day). Raise it in Settings or wait for reset.`,
-          'RATE_LIMIT_DAILY'
-        ));
+        job.reject(
+          new RateLimitError(
+            `Daily request limit reached for ${providerId} (${rpd}/day). Raise it in Settings or wait for reset.`,
+            'RATE_LIMIT_DAILY'
+          )
+        );
         continue;
       }
 
@@ -221,9 +228,10 @@ class RateLimiter {
           job.reject(err);
           return;
         }
-        const retryable = isRetryable(err)
-          && attempt < MAX_RETRIES
-          && (typeof job.canRetry !== 'function' || job.canRetry());
+        const retryable =
+          isRetryable(err) &&
+          attempt < MAX_RETRIES &&
+          (typeof job.canRetry !== 'function' || job.canRetry());
 
         if (!retryable) {
           job.reject(err);
@@ -262,10 +270,14 @@ class RateLimiter {
       const timer = setTimeout(resolve, ms);
       if (timer.unref) timer.unref();
       if (signal) {
-        signal.addEventListener('abort', () => {
-          clearTimeout(timer);
-          resolve();
-        }, { once: true });
+        signal.addEventListener(
+          'abort',
+          () => {
+            clearTimeout(timer);
+            resolve();
+          },
+          { once: true }
+        );
       }
     });
   }

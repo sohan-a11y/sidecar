@@ -84,7 +84,9 @@ export default function TranscriptPane({ turns, onCopy }) {
           onChange={(e) => setQuery(e.target.value)}
         />
         {query && (
-          <span className="transcript-count">{filtered.length}/{turns.length}</span>
+          <span className="transcript-count">
+            {filtered.length}/{turns.length}
+          </span>
         )}
         <button type="button" className="link-btn" onClick={copyAll} disabled={turns.length === 0}>
           Copy all

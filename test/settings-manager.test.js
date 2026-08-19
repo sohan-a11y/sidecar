@@ -74,7 +74,10 @@ describe('SettingsManager', () => {
   });
 
   it('preserves the v1 transcription provider rule (gemini, else openai)', () => {
-    writeLegacyFile({ currentProvider: 'anthropic', apiKeys: { openai: 'sk-o', anthropic: 'sk-a' } });
+    writeLegacyFile({
+      currentProvider: 'anthropic',
+      apiKeys: { openai: 'sk-o', anthropic: 'sk-a' }
+    });
     expect(settings.get().stt.provider).toBe('openai');
     expect(settings.get().stt.apiKeys.openai).toBe('sk-o');
   });

@@ -36,11 +36,13 @@ class SessionManager {
   // ------------------------------------------------------------------ lifecycle
 
   slugify(text) {
-    return (text || 'session')
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '')
-      .slice(0, 40) || 'session';
+    return (
+      (text || 'session')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 40) || 'session'
+    );
   }
 
   /** Snapshot the interview context so a saved session explains itself later. */
@@ -49,7 +51,8 @@ class SessionManager {
 
     const context = ContextStore.getSession();
     const startedAt = Date.now();
-    const label = title || [context.role, context.company].filter(Boolean).join(' at ') || 'Session';
+    const label =
+      title || [context.role, context.company].filter(Boolean).join(' at ') || 'Session';
 
     this.session = {
       id: `${new Date(startedAt).toISOString().replace(/[:.]/g, '-')}-${this.slugify(label)}`,
@@ -164,9 +167,8 @@ class SessionManager {
     const summary = this.session.summary.text || '';
 
     // Hard ceiling: drop from the oldest end until the estimate fits.
-    const cost = (turns) => this.estimateTokens(
-      summary + turns.map((t) => `${t.sender}: ${t.text}`).join('\n')
-    );
+    const cost = (turns) =>
+      this.estimateTokens(summary + turns.map((t) => `${t.sender}: ${t.text}`).join('\n'));
     while (slice.length > 1 && cost(slice) > maxPromptTokens) {
       slice = slice.slice(1);
     }
@@ -205,7 +207,9 @@ class SessionManager {
         }
       })
       .catch((e) => console.warn('[SessionManager] Summary failed:', e.message))
-      .finally(() => { this._summarising = false; });
+      .finally(() => {
+        this._summarising = false;
+      });
   }
 
   // ------------------------------------------------------------------ persistence
@@ -332,7 +336,7 @@ class SessionManager {
   // ---------------------------------------------------------------------- export
 
   export(id, format = 'md') {
-    const record = (this.session && this.session.id === id) ? this.session : this.readFile(id);
+    const record = this.session && this.session.id === id ? this.session : this.readFile(id);
     if (!record) throw new Error('That session is no longer on disk.');
 
     if (format === 'json') return JSON.stringify(record, null, 2);
@@ -343,7 +347,11 @@ class SessionManager {
     if (format === 'md') {
       lines.push(`# ${record.title}`, '', `_${when}_`, '');
       if (record.context && (record.context.role || record.context.company)) {
-        lines.push(`**Role:** ${record.context.role || '—'}  `, `**Company:** ${record.context.company || '—'}`, '');
+        lines.push(
+          `**Role:** ${record.context.role || '—'}  `,
+          `**Company:** ${record.context.company || '—'}`,
+          ''
+        );
       }
       lines.push('## Transcript', '');
       for (const t of record.transcript || []) {
@@ -374,7 +382,14 @@ class SessionManager {
   /** Serialisable state for the renderer. */
   state() {
     if (!this.session) {
-      return { active: false, id: null, title: '', turnCount: 0, answerCount: 0, estimatedTokens: 0 };
+      return {
+        active: false,
+        id: null,
+        title: '',
+        turnCount: 0,
+        answerCount: 0,
+        estimatedTokens: 0
+      };
     }
     const window = this.getPromptWindow();
     return {

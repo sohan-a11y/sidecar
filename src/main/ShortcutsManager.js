@@ -4,9 +4,21 @@ const SettingsManager = require('./SettingsManager');
 // Action id -> what it does and what it is called in the UI.
 const ACTIONS = [
   { id: 'assist', label: 'Assist', description: 'Answer using the screen and conversation' },
-  { id: 'code', label: 'Solve code on screen', description: 'Analyse the coding problem on screen' },
-  { id: 'quickAssist', label: 'Start listening and assist', description: 'Turn capture on, then assist' },
-  { id: 'toggleOverlay', label: 'Hide / show overlay', description: 'Hide the panel without ending the session' },
+  {
+    id: 'code',
+    label: 'Solve code on screen',
+    description: 'Analyse the coding problem on screen'
+  },
+  {
+    id: 'quickAssist',
+    label: 'Start listening and assist',
+    description: 'Turn capture on, then assist'
+  },
+  {
+    id: 'toggleOverlay',
+    label: 'Hide / show overlay',
+    description: 'Hide the panel without ending the session'
+  },
   { id: 'quit', label: 'Quit Sidecar', description: 'Close the app' }
 ];
 

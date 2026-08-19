@@ -65,7 +65,8 @@ contextBridge.exposeInMainWorld('sidecar', {
   overlay: {
     apply: (patch) => ipcRenderer.invoke('sidecar:overlay:apply', patch),
     displays: () => ipcRenderer.invoke('sidecar:overlay:displays'),
-    placeOn: (displayId, position) => ipcRenderer.invoke('sidecar:overlay:place', { displayId, position }),
+    placeOn: (displayId, position) =>
+      ipcRenderer.invoke('sidecar:overlay:place', { displayId, position }),
     toggle: () => ipcRenderer.invoke('sidecar:overlay:toggle')
   },
   shortcuts: {
@@ -78,7 +79,8 @@ contextBridge.exposeInMainWorld('sidecar', {
   regionSelected: (region) => ipcRenderer.send('sidecar:capture:region-selected', region),
   regionCancel: () => ipcRenderer.send('sidecar:capture:region-cancel'),
   toggleListening: () => ipcRenderer.invoke('sidecar:toggle-listening'),
-  sendAudioChunk: (source, arrayBuffer) => ipcRenderer.send('sidecar:audio-chunk', { source, arrayBuffer }),
+  sendAudioChunk: (source, arrayBuffer) =>
+    ipcRenderer.send('sidecar:audio-chunk', { source, arrayBuffer }),
   sendVadState: (source, state) => ipcRenderer.send('sidecar:vad', { source, state }),
   listSttEngines: () => ipcRenderer.invoke('sidecar:stt:engines'),
   autoAnswer: {
