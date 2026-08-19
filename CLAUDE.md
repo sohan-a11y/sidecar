@@ -18,8 +18,10 @@ logic only — no renderer test harness).
 ```
 src/main/        WindowManager, MediaCapture, TranscriptionService, LlmService,
                  SettingsManager, ShortcutsManager, IpcRouter, RateLimiter, KeyStore,
-                 ContextStore, ProfileBuilder, PromptBuilder, index.js
-src/main/providers/  Provider adapters (openai, anthropic, gemini, openaiCompatible) + registry
+                 ContextStore, ProfileBuilder, PromptBuilder, SessionManager,
+                 QuestionDetector, AutoAnswer, index.js
+src/main/providers/  Chat provider adapters (openai, anthropic, gemini, openaiCompatible) + registry
+src/main/stt/    Transcription engines (deepgram, assemblyai, openaiRealtime, batch fallback)
 src/preload/     contextBridge surface, exposed as window.sidecar
 src/renderer/    App.jsx (state coordinator) + components/, index.css (hand-rolled design system)
 test/            vitest unit tests for pure main-process logic
@@ -57,12 +59,18 @@ test/            vitest unit tests for pure main-process logic
   * `sidecar-data.json` — settings (API keys encrypted via `safeStorage` where available)
   * `sidecar-usage.json` — daily request counters for the rate limiter
   * `sidecar-context.json` — ingested documents, distilled profile, story bank, session setup
+  * `sessions/*.json` — one file per session: transcript, answers, context snapshot
 
 ## Non-goals
 
 Do not work on: anti-detection or capture-evasion features, accounts, subscriptions, billing,
 usage metering (beyond local rate limiting), analytics, or crash reporting. If a task seems to
 require one of these, stop and say so instead of building it.
+
+## Verifying
+
+`npm run lint`, `npm test`, `npm run build`, then a manual smoke test. There is no renderer test
+harness; anything visual has to be looked at.
 
 ## Build plan
 
