@@ -14,6 +14,7 @@ const Providers = require('./providers');
 const { isAbort } = require('./providers/util');
 
 const SttEngines = require('./stt');
+const AutoAnswer = require('./AutoAnswer');
 
 class IpcRouter {
   constructor() {
@@ -22,6 +23,8 @@ class IpcRouter {
     this.isLlmBusy = false;
     this.activeRequest = null;
     this.sttErrorShown = false;
+    this.activeRequestIsAuto = false;
+    this.lastSystemTurnAt = 0;
   }
 
   initialize() {
@@ -33,6 +36,18 @@ class IpcRouter {
     LlmService.onStatus = (message) => WindowManager.send('status', { message });
     TranscriptionService.onStatus = (message) => WindowManager.send('status', { message });
     TranscriptionService.onResult = (result) => this.handleSttResult(result);
+
+    AutoAnswer.onNotice = (message) => WindowManager.send('status', { message });
+    AutoAnswer.onCancel = (why) => {
+      if (this.activeRequest && this.activeRequestIsAuto) {
+        this.activeRequest.abort();
+        WindowManager.send('status', { message: `Auto-answer cancelled — ${why}.` });
+      }
+    };
+    AutoAnswer.onTrigger = ({ trigger, confidence, reasons, speculative }) => {
+      WindowManager.send('auto-answer:fired', { trigger, confidence, reasons, speculative });
+      this.executeMode('reply', '', { priority: 'auto', auto: true });
+    };
     RateLimiter.onChange = (snapshot) => WindowManager.send('usage', snapshot);
     ContextStore.onChange = (view) => WindowManager.send('context:changed', view);
     SessionManager.onChange = (state) => WindowManager.send('session:state', state);
@@ -54,6 +69,7 @@ class IpcRouter {
       SettingsManager.set(patch);
       this.applyRateLimits();
       TranscriptionService.reset();
+      AutoAnswer.reset();
       this.validateConfiguredModels();
       return SettingsManager.publicView();
     });
@@ -123,6 +139,14 @@ class IpcRouter {
     });
 
     ipcMain.handle('sidecar:stt:engines', () => SttEngines.list());
+
+    // Auto-answer toggle lives in the header, so it gets its own channel.
+    ipcMain.handle('sidecar:auto-answer:toggle', (_event, enabled) => {
+      SettingsManager.set({ autoAnswer: { enabled: !!enabled } });
+      AutoAnswer.reset();
+      return SettingsManager.get().autoAnswer;
+    });
+    ipcMain.handle('sidecar:auto-answer:get', () => SettingsManager.get().autoAnswer);
 
     // 9. Rate-limit budget snapshot
     ipcMain.handle('sidecar:usage:get', () => RateLimiter.snapshot());
@@ -350,6 +374,16 @@ class IpcRouter {
       confidence
     });
     WindowManager.send('transcript', turn);
+
+    // Detection runs on the other side of the conversation only.
+    if (channel === 'system') {
+      const silenceMs = this.lastSystemTurnAt ? Date.now() - this.lastSystemTurnAt : undefined;
+      if (isFinal) this.lastSystemTurnAt = Date.now();
+      AutoAnswer.consider(
+        { text: turn.text, isFinal: !!isFinal, silenceMs },
+        SettingsManager.effective().llm.provider
+      );
+    }
   }
 
   /** One VAD-delimited utterance, batch engine only. */
@@ -380,7 +414,16 @@ class IpcRouter {
     }
   }
 
-  async executeMode(mode, userText, { priority = 'user' } = {}) {
+  async executeMode(mode, userText, { priority = 'user', auto = false } = {}) {
+    if (!auto) {
+      // A manual press outranks anything auto-answer was about to do, including
+      // a request already in flight.
+      AutoAnswer.standDown();
+      if (this.isLlmBusy && this.activeRequestIsAuto && this.activeRequest) {
+        this.activeRequest.abort();
+        this.isLlmBusy = false;
+      }
+    }
     if (this.isLlmBusy) return;
     const modeConfig = LlmService.modes[mode];
     if (!modeConfig) return;
@@ -388,6 +431,7 @@ class IpcRouter {
     this.isLlmBusy = true;
     const controller = new AbortController();
     this.activeRequest = controller;
+    this.activeRequestIsAuto = auto;
 
     const userBubble = modeConfig.requiresScreen || mode === 'ask'
       ? (userText || (mode === 'code' ? 'Analyze screen contents' : 'Assist'))
@@ -448,6 +492,7 @@ class IpcRouter {
     } finally {
       this.isLlmBusy = false;
       this.activeRequest = null;
+      this.activeRequestIsAuto = false;
     }
   }
 

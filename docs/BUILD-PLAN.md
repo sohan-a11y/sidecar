@@ -9,7 +9,7 @@ Scope note: no backend, no accounts, no billing, no telemetry. BYO-key, local-on
 - [x] Phase 1 — Context layer (resume, JD, profile, story bank)
 - [x] Phase 2 — Live transcript UI + sessions
 - [x] Phase 3 — Streaming ASR + multilingual
-- [ ] Phase 4 — Question detection + auto-answer
+- [x] Phase 4 — Question detection + auto-answer
 - [ ] Phase 5 — Answer UX + follow-up threading
 - [ ] Phase 6 — Capture + overlay controls
 - [ ] Phase 7 — Open-source hygiene (can run any time after Phase 0)
@@ -348,6 +348,23 @@ interlock right or free-tier quotas evaporate in one session.
 
 **Contract:** detection is advisory and always overridable; auto-answer can never starve a manual
 request or exceed the configured budget.
+
+**Landed** (`phase-4-question-detection`):
+
+- `QuestionDetector.js` on the system channel only: interrogatives, auxiliary-verb inversion,
+  trailing `?`, imperative prompts, filler rejection, and semantic endpointing (a turn ending in a
+  conjunction scores down as unfinished). Returns a confidence and its reasons, never a command.
+  `setStrategy()` swaps in a classifier without touching callers.
+- `AutoAnswer.js`: off by default, fires above a configurable confidence (default 0.7), with
+  debounce, cooldown, a per-minute cap, and a budget check that refuses to spend the last few
+  requests of the day. Speculative generation on interim transcripts is opt-in and aborts when the
+  final question diverges.
+- Manual presses stand auto-answer down and abort an auto request already in flight.
+- Header toggle with an unmistakable armed state, and a "detected question" chip above each
+  auto-answer showing the trigger text and confidence.
+
+**Bug found while testing:** config read numeric settings with `||`, so a deliberate `0` (cooldown,
+debounce) silently became the default. Now read with a finite-number check.
 
 ---
 
