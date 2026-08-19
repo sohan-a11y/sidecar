@@ -1,5 +1,8 @@
 const LlmService = require('./LlmService');
 const ContextStore = require('./ContextStore');
+const SettingsManager = require('./SettingsManager');
+
+const BLOCK_SEPARATOR = String.fromCharCode(10, 10);
 
 const MAX_STORIES = 3;
 const MAX_JD_CHARS = 4000;
@@ -27,6 +30,16 @@ const LENGTH_HINTS = {
   detailed: 'A fuller answer is welcome, but stay scannable — bullets over paragraphs.'
 };
 
+// Output shape. speak-points is the default for a reason: the user is talking while reading it.
+const FORMAT_PRESETS = {
+  'speak-points': 'Answer as 3-5 bullet points, most important first, each about 7 words — '
+    + 'phrases the user can glance at and say out loud. No preamble, no closing line, no prose.',
+  brief: 'Answer in at most two short sentences. No preamble.',
+  detailed: 'Give a full answer, but keep it scannable: short paragraphs or bullets, no walls of text.',
+  code: 'Give a short statement of the approach, then one clean code block, then time and space '
+    + 'complexity. No preamble.'
+};
+
 const TONE_HINTS = {
   neutral: '',
   conversational: 'Write the way the user would speak it out loud: plain, warm, contractions welcome.',
@@ -47,7 +60,7 @@ class PromptBuilder {
    * @param {{ transcript?: Array, userText?: string, images?: Array }} context
    * @returns {{ system: Array<{text:string, cacheable:boolean}>, messages: Array }}
    */
-  build(mode, { transcript = [], transcriptSummary = '', userText = '', images = [] } = {}) {
+  build(mode, { transcript = [], transcriptSummary = '', userText = '', images = [], history = [], preset } = {}) {
     const modeConfig = LlmService.modes[mode];
     if (!modeConfig) throw new Error(`Unknown mode: ${mode}`);
 
@@ -55,7 +68,7 @@ class PromptBuilder {
     const hasProfile = ContextStore.hasProfile();
     const session = ContextStore.getSession();
 
-    const system = [{ text: this.modeBlock(modeConfig, hasProfile, session), cacheable: false }];
+    const system = [{ text: this.modeBlock(modeConfig, hasProfile, session, mode, preset), cacheable: false }];
 
     if (hasProfile) {
       const text = this.profileBlock(profile);
@@ -79,13 +92,24 @@ class PromptBuilder {
 
     return {
       system,
-      messages: [{ role: 'user', content: parts.filter(Boolean).join('\n\n') }],
+      // Prior turns go ahead of the new one so follow-ups have something to refer to.
+      messages: [...history, { role: 'user', content: parts.filter(Boolean).join('\n\n') }],
       meta: { hasProfile, storyCount: stories.length, storyTitles: stories.map((s) => s.title) }
     };
   }
 
-  modeBlock(modeConfig, hasProfile, session) {
+  /** Which output shape applies: explicit override, then per-mode, then the global default. */
+  presetFor(mode, override) {
+    if (override && FORMAT_PRESETS[override]) return override;
+    const answers = SettingsManager.get().answers || {};
+    const perMode = (answers.modePresets || {})[mode];
+    if (perMode && FORMAT_PRESETS[perMode]) return perMode;
+    return FORMAT_PRESETS[answers.preset] ? answers.preset : 'speak-points';
+  }
+
+  modeBlock(modeConfig, hasProfile, session, mode, presetOverride) {
     const lines = [modeConfig.systemPrompt];
+    lines.push(FORMAT_PRESETS[this.presetFor(mode, presetOverride)]);
 
     if (hasProfile) {
       lines.push(

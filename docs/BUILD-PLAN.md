@@ -10,7 +10,7 @@ Scope note: no backend, no accounts, no billing, no telemetry. BYO-key, local-on
 - [x] Phase 2 — Live transcript UI + sessions
 - [x] Phase 3 — Streaming ASR + multilingual
 - [x] Phase 4 — Question detection + auto-answer
-- [ ] Phase 5 — Answer UX + follow-up threading
+- [x] Phase 5 — Answer UX + follow-up threading
 - [ ] Phase 6 — Capture + overlay controls
 - [ ] Phase 7 — Open-source hygiene (can run any time after Phase 0)
 
@@ -394,6 +394,23 @@ the prior turns so follow-ups work. Cap history depth, and add a **New thread** 
 - Queue depth of 1 with visible state, instead of a silent drop.
 
 **Contract:** every in-flight request is cancellable; every answer is copyable and re-runnable.
+
+**Landed** (`phase-5-answer-ux`):
+
+- Threading: prior turns are sent back, capped at `answers.historyDepth` (default 8 messages), with
+  a New thread button. Every answer used to be a cold one-shot.
+- Format presets — speak-points (default), brief, detailed, code — selectable globally, per mode,
+  and overridable per request via the retry-as menu. They compose with the Phase 1 session
+  length/tone/language settings.
+- Stop button cancels in flight through the AbortController already threaded to every adapter.
+  Retry and retry-as-preset re-run the last request and replace the previous answer.
+- Copy on every message; copy and highlighting on every code block.
+- Queue depth of 1 with a visible "queued" pill, replacing the silent drop when `isLlmBusy`.
+
+**Deviation:** no syntax-highlighting library. highlight.js with a few grammars is ~30 kB gzipped
+against a renderer bundle of ~62 kB gzipped, and shiki is larger. `CodeBlock.jsx` does a
+regex pass over strings, comments, numbers and keywords for the languages that actually appear in
+interviews, at zero bundle cost. Swappable if real usage needs more.
 
 ---
 
