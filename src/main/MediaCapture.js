@@ -66,7 +66,10 @@ class MediaCapture {
     const display = screen.getPrimaryDisplay();
     const aspect = display.size.height / display.size.width;
     const sources = await desktopCapturer.getSources({
-      types: config.sourceId && config.sourceId.startsWith('window:') ? ['window'] : ['screen', 'window'],
+      types:
+        config.sourceId && config.sourceId.startsWith('window:')
+          ? ['window']
+          : ['screen', 'window'],
       thumbnailSize: { width: maxWidth, height: Math.round(maxWidth * aspect) }
     });
 
@@ -90,9 +93,10 @@ class MediaCapture {
     }
 
     const hash = this.averageHash(image);
-    const unchanged = !force
-      && config.skipUnchanged !== false
-      && this.hammingDistance(hash, this.lastHash) <= HASH_MATCH_THRESHOLD;
+    const unchanged =
+      !force &&
+      config.skipUnchanged !== false &&
+      this.hammingDistance(hash, this.lastHash) <= HASH_MATCH_THRESHOLD;
 
     this.lastHash = hash;
 

@@ -1,6 +1,10 @@
 import React, { useState, useEffect } from 'react';
 
-const RETENTIONS = [['forever', 'Keep forever'], ['days', 'Keep for N days'], ['never', 'Never persist']];
+const RETENTIONS = [
+  ['forever', 'Keep forever'],
+  ['days', 'Keep for N days'],
+  ['never', 'Never persist']
+];
 
 export default function SessionsTab({ sidecar, retention, onRetentionChange }) {
   const [sessions, setSessions] = useState([]);
@@ -8,7 +12,9 @@ export default function SessionsTab({ sidecar, retention, onRetentionChange }) {
   const [note, setNote] = useState('');
 
   const refresh = async () => setSessions(await sidecar.session.list());
-  useEffect(() => { refresh(); }, []);
+  useEffect(() => {
+    refresh();
+  }, []);
 
   const exportSession = async (id, format) => {
     const res = await sidecar.session.export(id, format);
@@ -38,10 +44,12 @@ export default function SessionsTab({ sidecar, retention, onRetentionChange }) {
               type="number"
               min="1"
               value={retention.retentionDays}
-              onChange={(e) => onRetentionChange({
-                ...retention,
-                retentionDays: Math.max(1, Number(e.target.value) || 1)
-              })}
+              onChange={(e) =>
+                onRetentionChange({
+                  ...retention,
+                  retentionDays: Math.max(1, Number(e.target.value) || 1)
+                })
+              }
             />
           </div>
         )}
@@ -53,7 +61,9 @@ export default function SessionsTab({ sidecar, retention, onRetentionChange }) {
       <div className="setting-group">
         <div className="model-picker-head">
           <label className="setting-label">Saved sessions</label>
-          <button type="button" className="link-btn" onClick={refresh}>Refresh</button>
+          <button type="button" className="link-btn" onClick={refresh}>
+            Refresh
+          </button>
         </div>
 
         {sessions.length === 0 && <p className="setting-hint">No saved sessions yet.</p>}
@@ -68,24 +78,49 @@ export default function SessionsTab({ sidecar, retention, onRetentionChange }) {
                     autoFocus
                     defaultValue={s.title}
                     onBlur={async (e) => {
-                      setSessions(await sidecar.session.rename(s.id, e.target.value.trim() || s.title));
+                      setSessions(
+                        await sidecar.session.rename(s.id, e.target.value.trim() || s.title)
+                      );
                       setRenaming(null);
                     }}
                     onKeyDown={(e) => e.key === 'Enter' && e.target.blur()}
                   />
                 ) : (
-                  <span className="session-title" onDoubleClick={() => setRenaming(s.id)}>{s.title}</span>
+                  <span className="session-title" onDoubleClick={() => setRenaming(s.id)}>
+                    {s.title}
+                  </span>
                 )}
                 <span className="session-meta">
-                  {new Date(s.startedAt).toLocaleString()} · {s.turnCount} turns · {s.answerCount} answers
+                  {new Date(s.startedAt).toLocaleString()} · {s.turnCount} turns · {s.answerCount}{' '}
+                  answers
                   {s.endedAt ? '' : ' · in progress'}
                 </span>
               </div>
               <div className="session-actions">
-                <button type="button" className="link-btn" onClick={() => setRenaming(s.id)}>Rename</button>
-                <button type="button" className="link-btn" onClick={() => exportSession(s.id, 'md')}>MD</button>
-                <button type="button" className="link-btn" onClick={() => exportSession(s.id, 'txt')}>TXT</button>
-                <button type="button" className="link-btn" onClick={() => exportSession(s.id, 'json')}>JSON</button>
+                <button type="button" className="link-btn" onClick={() => setRenaming(s.id)}>
+                  Rename
+                </button>
+                <button
+                  type="button"
+                  className="link-btn"
+                  onClick={() => exportSession(s.id, 'md')}
+                >
+                  MD
+                </button>
+                <button
+                  type="button"
+                  className="link-btn"
+                  onClick={() => exportSession(s.id, 'txt')}
+                >
+                  TXT
+                </button>
+                <button
+                  type="button"
+                  className="link-btn"
+                  onClick={() => exportSession(s.id, 'json')}
+                >
+                  JSON
+                </button>
                 <button
                   type="button"
                   className="link-btn danger"

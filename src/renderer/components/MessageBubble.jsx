@@ -5,7 +5,10 @@ export default function MessageBubble({ message }) {
   // Auto-answer explains itself: what it heard, and how sure it was.
   if (message.role === 'trigger') {
     return (
-      <div className="trigger-chip" title={`confidence ${Math.round((message.confidence || 0) * 100)}%`}>
+      <div
+        className="trigger-chip"
+        title={`confidence ${Math.round((message.confidence || 0) * 100)}%`}
+      >
         <span className="trigger-label">detected question</span>
         <span className="trigger-text">{message.text}</span>
       </div>
@@ -24,9 +27,7 @@ export default function MessageBubble({ message }) {
 
     const flushCodeBlock = (key) => {
       if (codeContent.length > 0) {
-        elements.push(
-          <CodeBlock key={`code-${key}`} code={codeContent.join('\n')} />
-        );
+        elements.push(<CodeBlock key={`code-${key}`} code={codeContent.join('\n')} />);
         codeContent = [];
       }
     };
@@ -119,9 +120,17 @@ export default function MessageBubble({ message }) {
         }
 
         if (matchType === 'bold') {
-          tokens.push(<strong key={`bold-${keyIdx++}`} className="bubble-bold">{firstMatch[1]}</strong>);
+          tokens.push(
+            <strong key={`bold-${keyIdx++}`} className="bubble-bold">
+              {firstMatch[1]}
+            </strong>
+          );
         } else if (matchType === 'code') {
-          tokens.push(<code key={`code-${keyIdx++}`} className="bubble-inline-code">{firstMatch[1]}</code>);
+          tokens.push(
+            <code key={`code-${keyIdx++}`} className="bubble-inline-code">
+              {firstMatch[1]}
+            </code>
+          );
         }
 
         remaining = remaining.slice(firstMatch.index + firstMatch[0].length);

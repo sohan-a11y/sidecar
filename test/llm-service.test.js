@@ -75,10 +75,11 @@ describe('LlmService vision gating', () => {
     }
   });
 
-  const run = (images) => LlmService.stream(
-    { mode: 'assist', messages: [{ role: 'user', content: 'hi' }], images },
-    () => {}
-  );
+  const run = (images) =>
+    LlmService.stream(
+      { mode: 'assist', messages: [{ role: 'user', content: 'hi' }], images },
+      () => {}
+    );
 
   it('sends the image when the chat model has vision', async () => {
     await run(['data:image/png;base64,AAA']);
@@ -154,7 +155,11 @@ describe('provider registry', () => {
   });
 
   it('only offers transcription-capable providers for speech', () => {
-    expect(Providers.transcriptionProviders().map((p) => p.id)).toEqual(['openai', 'gemini', 'custom']);
+    expect(Providers.transcriptionProviders().map((p) => p.id)).toEqual([
+      'openai',
+      'gemini',
+      'custom'
+    ]);
   });
 
   it('gives every adapter the same interface', () => {

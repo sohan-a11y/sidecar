@@ -27,13 +27,19 @@ beforeAll(() => {
       app: { getPath: () => tmpDir, quit() {}, on() {}, whenReady: () => Promise.resolve() },
       safeStorage: { isEncryptionAvailable: () => false },
       ipcMain: {
-        handle: (channel, fn) => { handlers.invoke[channel] = fn; },
-        on: (channel, fn) => { handlers.on[channel] = fn; }
+        handle: (channel, fn) => {
+          handlers.invoke[channel] = fn;
+        },
+        on: (channel, fn) => {
+          handlers.on[channel] = fn;
+        }
       },
       shell: { openExternal: () => Promise.resolve() },
       globalShortcut: { register: () => true, unregisterAll() {} },
       desktopCapturer: { getSources: () => Promise.resolve([]) },
-      screen: { getPrimaryDisplay: () => ({ workArea: { x: 0, y: 0, width: 1920, height: 1080 } }) },
+      screen: {
+        getPrimaryDisplay: () => ({ workArea: { x: 0, y: 0, width: 1920, height: 1080 } })
+      },
       BrowserWindow: class {},
       session: { defaultSession: {} }
     }

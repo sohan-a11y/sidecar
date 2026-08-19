@@ -8,31 +8,71 @@
  * v1 is a heuristic. `setStrategy()` is the seam for a classifier; callers never change.
  */
 
-const INTERROGATIVES = [
-  'what', 'why', 'how', 'when', 'where', 'which', 'who', 'whom', 'whose'
-];
+const INTERROGATIVES = ['what', 'why', 'how', 'when', 'where', 'which', 'who', 'whom', 'whose'];
 
 // Auxiliary-verb inversion: "can you", "have you", "did they"...
 const AUXILIARIES = [
-  'can', 'could', 'would', 'will', 'shall', 'should', 'do', 'does', 'did',
-  'is', 'are', 'was', 'were', 'have', 'has', 'had', 'may', 'might', 'am'
+  'can',
+  'could',
+  'would',
+  'will',
+  'shall',
+  'should',
+  'do',
+  'does',
+  'did',
+  'is',
+  'are',
+  'was',
+  'were',
+  'have',
+  'has',
+  'had',
+  'may',
+  'might',
+  'am'
 ];
 
 const SUBJECTS = ['you', 'your', 'we', 'they', 'i', 'he', 'she', 'it', 'there', 'that', 'this'];
 
 // Imperative prompts that are questions in everything but punctuation.
 const IMPERATIVE_PROMPTS = [
-  'tell me about', 'walk me through', 'talk me through', 'describe', 'explain',
-  'give me an example', 'give an example', 'share an example', 'take me through',
-  'let\'s talk about', 'i\'d like to hear', 'i would like to hear', 'help me understand',
-  'what would you do', 'how would you', 'suppose', 'imagine'
+  'tell me about',
+  'walk me through',
+  'talk me through',
+  'describe',
+  'explain',
+  'give me an example',
+  'give an example',
+  'share an example',
+  'take me through',
+  "let's talk about",
+  "i'd like to hear",
+  'i would like to hear',
+  'help me understand',
+  'what would you do',
+  'how would you',
+  'suppose',
+  'imagine'
 ];
 
 // Phrases that look interrogative but are conversational filler.
 const FILLER = [
-  'you know', 'right', 'okay', 'ok', 'sorry', 'what', 'huh', 'pardon',
-  'can you hear me', 'are you there', 'can you see my screen', 'is that ok',
-  'does that make sense', 'sound good', 'any questions'
+  'you know',
+  'right',
+  'okay',
+  'ok',
+  'sorry',
+  'what',
+  'huh',
+  'pardon',
+  'can you hear me',
+  'are you there',
+  'can you see my screen',
+  'is that ok',
+  'does that make sense',
+  'sound good',
+  'any questions'
 ];
 
 const MIN_WORDS = 3;
@@ -88,7 +128,9 @@ class QuestionDetector {
       reasons.push('auxiliary-verb inversion');
     }
 
-    const imperative = IMPERATIVE_PROMPTS.find((p) => normalised.startsWith(p) || normalised.includes(` ${p}`));
+    const imperative = IMPERATIVE_PROMPTS.find(
+      (p) => normalised.startsWith(p) || normalised.includes(` ${p}`)
+    );
     if (imperative) {
       score += 0.45;
       reasons.push(`imperative prompt "${imperative}"`);
@@ -109,7 +151,11 @@ class QuestionDetector {
     // Semantic endpointing: has the speaker actually finished, or just paused?
     // A trailing conjunction or filler means more is coming.
     const lastWord = words[words.length - 1].replace(/[?.!,]+$/, '');
-    if (['and', 'but', 'so', 'or', 'because', 'like', 'um', 'uh', 'the', 'a', 'to', 'of'].includes(lastWord)) {
+    if (
+      ['and', 'but', 'so', 'or', 'because', 'like', 'um', 'uh', 'the', 'a', 'to', 'of'].includes(
+        lastWord
+      )
+    ) {
       score -= 0.35;
       reasons.push('trails off mid-thought');
     }
