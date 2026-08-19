@@ -1,6 +1,16 @@
 import React from 'react';
 
 export default function MessageBubble({ message }) {
+  // Auto-answer explains itself: what it heard, and how sure it was.
+  if (message.role === 'trigger') {
+    return (
+      <div className="trigger-chip" title={`confidence ${Math.round((message.confidence || 0) * 100)}%`}>
+        <span className="trigger-label">detected question</span>
+        <span className="trigger-text">{message.text}</span>
+      </div>
+    );
+  }
+
   const { role, text, isStreaming } = message;
 
   const parseMarkdown = (rawText) => {
