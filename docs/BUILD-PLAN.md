@@ -8,7 +8,7 @@ Scope note: no backend, no accounts, no billing, no telemetry. BYO-key, local-on
 - [x] Phase 0 — Provider abstraction, TokenRouter, STT/LLM split, rate limiting
 - [x] Phase 1 — Context layer (resume, JD, profile, story bank)
 - [x] Phase 2 — Live transcript UI + sessions
-- [ ] Phase 3 — Streaming ASR + multilingual
+- [x] Phase 3 — Streaming ASR + multilingual
 - [ ] Phase 4 — Question detection + auto-answer
 - [ ] Phase 5 — Answer UX + follow-up threading
 - [ ] Phase 6 — Capture + overlay controls
@@ -293,6 +293,33 @@ ticks. Keep RMS as a cheap pre-gate to avoid waking VAD on silence.
 
 **Contract:** STT emits interim and final events per channel with timing; no consumer assumes fixed
 3.5s chunks or English.
+
+**Landed** (`phase-3-streaming-asr`):
+
+- `src/main/stt/`: `deepgram`, `assemblyai`, `openaiRealtime` streaming adapters over a shared
+  socket layer (buffer-while-connecting, reconnect with backoff, give up after 3 tries), plus
+  `batchFallback` — the old path, kept and selectable.
+- One socket per channel, so the two speakers never merge. Results carry
+  `{ text, isFinal, channel, startMs, endMs, confidence }`; interim turns replace the open turn on
+  that channel and render greyed and italic.
+- Repeated socket failures downgrade to batch at runtime with a status message, rather than
+  silently transcribing nothing.
+- `setInterval(3500)` is gone. A renderer VAD segments on speech boundaries with an adaptive noise
+  floor, hangover across natural pauses, a minimum-speech guard and a maximum-segment cut.
+- Per-channel language settings (`stt.languages.user` / `.system`); `language: 'en'` is no longer
+  hardcoded anywhere. Deepgram runs in `multi` mode on auto for code-switching; the UI states which
+  engines tolerate mixed-language speech. Answer language stays independent (Phase 1).
+
+**Deviations, and why:**
+
+- VAD is a hand-written energy segmenter with hysteresis, not `@ricky0123/vad-web`. That package
+  pulls `onnxruntime-web` (~11 MB) into a renderer bundle currently under 200 kB, for an app whose
+  own rules cap microsite JS at 80 kB. `createSegmenter()` is the seam a Silero backend drops into
+  if the energy VAD proves insufficient in the field. Say the word and I will swap it.
+- The three streaming adapters are written to each vendor's documented protocol but have **not**
+  been exercised against a live service — I have no keys for them. The batch path is verified.
+- New dependency `ws`: Electron 33's main process has no global `WebSocket`, and moving sockets to
+  the renderer would mean handing API keys across IPC, which the hard rules forbid.
 
 ---
 
