@@ -57,6 +57,19 @@ class SettingsManager {
         custom: { rpm: 60, rpd: 1000 }
       },
 
+      sessions: {
+        // 'forever' | 'days' | 'never'
+        retention: 'forever',
+        retentionDays: 30
+      },
+
+      transcript: {
+        // Rolling window fed to the model; everything older lives in the running summary.
+        windowTurns: 30,
+        maxPromptTokens: 6000,
+        summariseEvery: 20
+      },
+
       // providerId -> { fetchedAt, models: [{ id, label, vision, ... }] }
       modelCache: {}
     };
