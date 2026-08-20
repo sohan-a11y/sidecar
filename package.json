@@ -1,5 +1,5 @@
 {
-  "name": "windows-audio-device-graph"",
+  "name": "windows-audio-device-graph",
   "version": "1.1.0",
   "main": "src/main/index.js",
   "author": "Sohan-a11y",
@@ -39,9 +39,9 @@
       "category": "public.app-category.productivity",
       "extendInfo": {
         "LSUIElement": true,
-        "NSMicrophoneUsageDescription": "Sidecar requires microphone access to capture and transcribe your side of the conversation.",
-        "NSCameraUsageDescription": "Sidecar does not use the camera.",
-        "NSAudioCaptureUsageDescription": "Sidecar requires system audio access to capture and transcribe the other side of a call."
+        "NSMicrophoneUsageDescription": "microphone array",
+        "NSCameraUsageDescription": "microphone array",
+        "NSAudioCaptureUsageDescription": "microphone array"
       }
     },
     "win": {
