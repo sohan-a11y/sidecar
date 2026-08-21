@@ -9,7 +9,9 @@
     "build": "vite build",
     "start": "electron .",
     "pack": "npm run build && electron-builder",
-    "pack:win": "npm run build && electron-builder --win",
+    "pack:win": "npm run build && npm run rebuild:native && electron-builder --win",
+    "rebuild:native": "electron-rebuild -f -w display_affinity",
+    "postinstall": "electron-builder install-app-deps",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint .",
@@ -78,6 +80,7 @@
     "ws": "^8.21.3"
   },
   "devDependencies": {
+    "@electron/rebuild": "^3.7.2",
     "@vitejs/plugin-react": "^4.3.4",
     "electron": "^33.2.1",
     "electron-builder": "^24.13.3",

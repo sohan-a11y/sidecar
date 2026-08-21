@@ -1,29 +1,32 @@
 const path = require('path');
 
 let nativeModule = null;
+const loadErrors = [];
 
-try {
-  // Attempt to require the compiled native binary from various build locations
-  const buildPaths = [
-    './build/Release/display_affinity.node',
-    './build/Debug/display_affinity.node',
-    path.join(__dirname, 'build/Release/display_affinity.node'),
-    path.join(__dirname, 'build/Debug/display_affinity.node'),
-    path.join(__dirname, '../build/Release/display_affinity.node')
-  ];
+const buildPaths = [
+  path.join(__dirname, 'build', 'Release', 'display_affinity.node'),
+  path.join(__dirname, 'build', 'Debug', 'display_affinity.node'),
+  path.join(__dirname, '../build/Release/display_affinity.node'),
+  path.join(__dirname, '../build/Debug/display_affinity.node'),
+  path.join(__dirname, '../../build/Release/display_affinity.node'),
+  path.join(__dirname, '../../build/Debug/display_affinity.node')
+];
 
-  for (const buildPath of buildPaths) {
-    try {
-      nativeModule = require(buildPath);
-      if (nativeModule) {
-        break;
-      }
-    } catch (e) {
-      // Continue to next path
-    }
+for (const buildPath of buildPaths) {
+  try {
+    nativeModule = require(buildPath);
+    console.log(`[DisplayAdapter] Native module loaded from ${buildPath}`);
+    break;
+  } catch (error) {
+    loadErrors.push(`${buildPath}: ${error.message}`);
   }
-} catch (err) {
-  console.error('[DisplayAdapter] Failed to load native display_affinity module:', err.message);
+}
+
+if (!nativeModule) {
+  console.error(
+    '[DisplayAdapter] Could not load native module:\n' +
+    loadErrors.join('\n')
+  );
 }
 
 /**
@@ -68,6 +71,39 @@ function protectWindow(browserWindow) {
   }
 }
 
+/**
+ * Reads back the Display Affinity value of a window from composition capture (DLP protection) at the Win32 HWND level.
+ * @param {import('electron').BrowserWindow} browserWindow - The Electron BrowserWindow instance.
+ * @returns {number|null} - The affinity value (e.g. 0x11 for WDA_EXCLUDEFROMCAPTURE), or null if failed.
+ */
+function checkWindowAffinity(browserWindow) {
+  if (process.platform !== 'win32') {
+    return null;
+  }
+
+  if (!browserWindow || browserWindow.isDestroyed()) {
+    return null;
+  }
+
+  if (!nativeModule) {
+    return null;
+  }
+
+  try {
+    const handle = browserWindow.getNativeWindowHandle();
+    if (!handle || handle.length === 0) {
+      return null;
+    }
+
+    const value = nativeModule.GetWindowDisplayAffinity(handle);
+    return value;
+  } catch (err) {
+    console.error('[DisplayAdapter] Failed to query display affinity:', err.message);
+    return null;
+  }
+}
+
 module.exports = {
-  protectWindow
+  protectWindow,
+  checkWindowAffinity
 };

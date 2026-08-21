@@ -18,6 +18,60 @@ class WindowManager {
     this.currentMode = null;
   }
 
+  applyContentProtection(targetWindow, label = 'window') {
+    if (!targetWindow || targetWindow.isDestroyed()) {
+      return false;
+    }
+    const rawValue = String(process.env.SIDECAR_NO_PROTECT || '')
+      .trim()
+      .toLowerCase();
+    const disabled = rawValue === '1' || rawValue === 'true';
+    
+    console.log(`[WindowManager] Content protection disabled for ${label} check:`, disabled);
+
+    if (disabled) {
+      console.warn(
+        `[WindowManager] Content protection disabled for ${label}.`
+      );
+      targetWindow.setContentProtection(false);
+      return false;
+    }
+    try {
+      // Important: apply opacity first.
+      targetWindow.setOpacity(1);
+      // Electron applies WDA_EXCLUDEFROMCAPTURE on supported Windows.
+      targetWindow.setContentProtection(true);
+      if (process.platform === 'win32') {
+        try {
+          const DisplayAdapter = require('../../DisplayAdapter');
+          const nativeResult = DisplayAdapter.protectWindow(targetWindow);
+          const currentAffinity = DisplayAdapter.checkWindowAffinity(targetWindow);
+          console.log(
+            `[WindowManager] Native protection for ${label}:`,
+            nativeResult,
+            `Read affinity:`,
+            currentAffinity !== null ? `0x${currentAffinity.toString(16)}` : 'unknown'
+          );
+        } catch (error) {
+          console.warn(
+            `[WindowManager] Native protection unavailable for ${label}:`,
+            error.message
+          );
+        }
+      }
+      console.log(
+        `[WindowManager] Content protection requested for ${label}.`
+      );
+      return true;
+    } catch (error) {
+      console.error(
+        `[WindowManager] Failed to protect ${label}:`,
+        error
+      );
+      return false;
+    }
+  }
+
   createWindow() {
     const { workArea } = screen.getPrimaryDisplay();
     const overlay = settings.get().overlay || {};
@@ -53,20 +107,13 @@ class WindowManager {
       }
     });
 
-    const disableContentProtection = Boolean(process.env.SIDECAR_NO_PROTECT);
+    // Apply content protection initially
+    this.applyContentProtection(this.window, 'main overlay');
 
-    // Use native Electron content protection (WDA_EXCLUDEFROMCAPTURE)
-    this.window.setContentProtection(!disableContentProtection);
-
-    // If you compiled the C++ DisplayAdapter, we can still run it as a backup layer of security
-    if (!disableContentProtection) {
-      try {
-        const DisplayAdapter = require('../../DisplayAdapter');
-        DisplayAdapter.protectWindow(this.window);
-      } catch (err) {
-        console.warn('[WindowManager] Native display affinity addon not found, relying on Electron native protection.');
-      }
-    }
+    const disableContentProtection = Boolean(
+      process.env.SIDECAR_NO_PROTECT === '1' ||
+      process.env.SIDECAR_NO_PROTECT === 'true'
+    );
 
     if (process.platform === 'win32' && !disableContentProtection) {
       this._checkWindowsContentProtection();
@@ -97,13 +144,12 @@ class WindowManager {
     this.trackBounds();
     this.registerWindowGuards();
 
+    this.window.once('ready-to-show', () => {
+      this.applyContentProtection(this.window, 'main overlay ready-to-show');
+    });
+
     this.window.webContents.on('did-finish-load', () => {
       console.log('[WindowManager] Renderer finished loading');
-      const overlay = settings.get().overlay || {};
-      if (overlay.hidden === true) {
-        console.log('[WindowManager] Ignoring saved hidden state during debugging');
-      }
-
       this.window.setOpacity(1);
       const { workArea } = screen.getPrimaryDisplay();
       this.window.setBounds({
@@ -112,6 +158,8 @@ class WindowManager {
         width: 720,
         height: 650
       });
+      // Reapply after Chromium has created and displayed its surface.
+      this.applyContentProtection(this.window, 'main overlay after load');
       this.applyPassiveMode();
     });
 
@@ -280,17 +328,7 @@ class WindowManager {
 
     this.regionWindow.setAlwaysOnTop(true, 'screen-saver', 2);
 
-    const disableContentProtection = Boolean(process.env.SIDECAR_NO_PROTECT);
-    this.regionWindow.setContentProtection(!disableContentProtection);
-
-    if (!disableContentProtection) {
-      try {
-        const DisplayAdapter = require('../../DisplayAdapter');
-        DisplayAdapter.protectWindow(this.regionWindow);
-      } catch (err) {
-        console.warn('[WindowManager] Native display affinity addon not found for region picker.');
-      }
-    }
+    this.applyContentProtection(this.regionWindow, 'region picker');
 
     if (process.env.NODE_ENV === 'development') {
       this.regionWindow.loadURL('http://localhost:5173/region.html');
