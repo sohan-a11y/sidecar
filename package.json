@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "install": "echo Skipping default node-gyp rebuild",
     "start": "electron .",
     "pack": "npm run build && electron-builder",
     "pack:win": "npm run build && npm run rebuild:native && electron-builder --win",
