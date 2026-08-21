@@ -73,9 +73,15 @@ class WindowManager {
     const disableContentProtection =
       Boolean(process.env.SIDECAR_NO_PROTECT);
 
-    this.window.setContentProtection(
-      !disableContentProtection
-    );
+    if (!disableContentProtection) {
+      try {
+        const DisplayAdapter = require('../../DisplayAdapter');
+        DisplayAdapter.protectWindow(this.window);
+      } catch (err) {
+        console.error('[WindowManager] Failed to apply native display affinity:', err.message);
+        this.window.setContentProtection(true);
+      }
+    }
 
     if (
       process.platform === 'win32' &&
