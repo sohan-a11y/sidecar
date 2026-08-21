@@ -9,7 +9,9 @@
     "build": "vite build",
     "start": "electron .",
     "pack": "npm run build && electron-builder",
-    "pack:win": "npm run build && electron-builder --win",
+    "pack:win": "npm run build && npm run rebuild:native && electron-builder --win",
+    "rebuild:native": "electron-rebuild -f -w display_affinity",
+    "postinstall": "electron-builder install-app-deps",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint .",
@@ -27,6 +29,8 @@
       "src/preload/**/*",
       "out/**/*",
       "package.json",
+      "DisplayAdapter.js",
+      "build/Release/display_affinity.node",
       "!node_modules/pdf-parse/test/**",
       "!node_modules/pdf-parse/lib/pdf.js/v1.9.426/**",
       "!node_modules/pdf-parse/lib/pdf.js/v1.10.88/**",
@@ -68,6 +72,7 @@
     "@anthropic-ai/sdk": "^0.32.1",
     "@google/genai": "^0.3.0",
     "mammoth": "^1.12.1",
+    "node-addon-api": "^8.9.2",
     "openai": "^4.73.0",
     "pdf-parse": "^1.1.1",
     "react": "^18.3.1",
@@ -75,11 +80,13 @@
     "ws": "^8.21.3"
   },
   "devDependencies": {
+    "@electron/rebuild": "^3.7.2",
     "@vitejs/plugin-react": "^4.3.4",
     "electron": "^33.2.1",
     "electron-builder": "^24.13.3",
     "eslint": "^9.39.5",
     "globals": "^17.11.0",
+    "node-gyp": "^11.5.0",
     "vite": "^5.4.11",
     "vitest": "^4.1.11"
   }

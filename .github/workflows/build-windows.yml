@@ -28,6 +28,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Rebuild native addon for Electron
+        run: npx electron-rebuild -f -w display_affinity
+
       - name: Build and Package Windows Installer (NSIS)
         run: npm run build && npx electron-builder --win --publish never
 
