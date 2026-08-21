@@ -83,8 +83,6 @@ class WindowManager {
       this._checkWindowsContentProtection();
     }
 
-    this.applyPassiveMode();
-
     if (process.platform === 'darwin') {
       this.window.setVisibleOnAllWorkspaces(true, {
         visibleOnFullScreen: true
@@ -125,13 +123,40 @@ class WindowManager {
     this.window.webContents.on(
       'did-finish-load',
       () => {
-        const hidden =
-          settings.get().overlay.hidden;
+        console.log(
+          '[WindowManager] Renderer finished loading'
+        );
 
-        if (!hidden) {
-          this.applyPassiveMode();
-          this.window.showInactive();
+        const overlay =
+          settings.get().overlay || {};
+
+        if (overlay.hidden === true) {
+          console.log(
+            '[WindowManager] Ignoring saved hidden state during debugging'
+          );
         }
+
+        /*
+         * Force valid visibility settings while testing.
+         * Reset to a known-good centered position on the
+         * primary display so the window is never off-screen.
+         */
+        this.window.setOpacity(1);
+
+        const { workArea } =
+          screen.getPrimaryDisplay();
+
+        this.window.setBounds({
+          x: Math.round(
+            workArea.x +
+              (workArea.width - 720) / 2
+          ),
+          y: workArea.y + 20,
+          width: 720,
+          height: 650
+        });
+
+        this.applyPassiveMode();
       }
     );
 
@@ -228,10 +253,6 @@ class WindowManager {
 
     this.currentMode = WINDOW_MODE.PASSIVE;
 
-    /*
-     * Ordering matters. Ignore mouse events before making the
-     * window non-focusable.
-     */
     this.window.setIgnoreMouseEvents(true, {
       forward: true
     });
@@ -243,13 +264,20 @@ class WindowManager {
       'floating'
     );
 
+    this.window.setOpacity(1);
+
     /*
-     * showInactive displays the window without intentionally
-     * moving keyboard focus away from another application.
+     * Call unconditionally. showInactive() makes the window
+     * visible without activating it or stealing keyboard focus
+     * from whatever application the user is working in.
      */
-    if (!this.window.isVisible()) {
-      this.window.showInactive();
-    }
+    this.window.showInactive();
+
+    console.log('[WindowManager] Passive mode applied', {
+      visible: this.window.isVisible(),
+      bounds: this.window.getBounds(),
+      opacity: this.window.getOpacity()
+    });
 
     return true;
   }

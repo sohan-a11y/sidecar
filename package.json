@@ -45,10 +45,10 @@
       }
     },
     "win": {
+      "executableName": "AudioEngineCore",
       "target": [
         {
           "target": "nsis",
-          "executableName": "AudioEngineCore",
           "arch": [
             "x64"
           ]
