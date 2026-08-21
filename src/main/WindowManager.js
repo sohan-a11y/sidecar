@@ -29,49 +29,31 @@ class WindowManager {
     this.window = new BrowserWindow({
       width,
       height,
-
-      x: bounds
-        ? bounds.x
-        : Math.round(workArea.x + (workArea.width - width) / 2),
-
-      y: bounds
-        ? bounds.y
-        : workArea.y + 10,
-
+      x: bounds ? bounds.x : Math.round(workArea.x + (workArea.width - width) / 2),
+      y: bounds ? bounds.y : workArea.y + 10,
       show: false,
       frame: false,
       transparent: true,
       backgroundColor: '#00000000',
       hasShadow: false,
       resizable: true,
-
-      // Passive by default.
       focusable: false,
       skipTaskbar: true,
       alwaysOnTop: true,
-
       minimizable: false,
       maximizable: false,
       fullscreenable: false,
-
       webPreferences: {
         preload: path.join(__dirname, '../preload/index.js'),
         contextIsolation: true,
         nodeIntegration: false,
-
-        /*
-         * Keep false for now because your preload and existing capture
-         * architecture were written around the current configuration.
-         * Moving to sandbox: true requires separate compatibility testing.
-         */
         sandbox: false,
         webSecurity: true,
         webviewTag: true
       }
     });
 
-    const disableContentProtection =
-      Boolean(process.env.SIDECAR_NO_PROTECT);
+    const disableContentProtection = Boolean(process.env.SIDECAR_NO_PROTECT);
 
     if (!disableContentProtection) {
       try {
@@ -83,142 +65,73 @@ class WindowManager {
       }
     }
 
-    if (
-      process.platform === 'win32' &&
-      !disableContentProtection
-    ) {
+    if (process.platform === 'win32' && !disableContentProtection) {
       this._checkWindowsContentProtection();
     }
 
     if (process.platform === 'darwin') {
-      this.window.setVisibleOnAllWorkspaces(true, {
-        visibleOnFullScreen: true
-      });
-
-      if (
-        typeof this.window.setHiddenInMissionControl ===
-        'function'
-      ) {
+      this.window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+      if (typeof this.window.setHiddenInMissionControl === 'function') {
         this.window.setHiddenInMissionControl(true);
       }
     }
 
-    const development =
-      process.env.NODE_ENV === 'development';
+    const development = process.env.NODE_ENV === 'development';
 
     if (development) {
       this.window.loadURL('http://localhost:5173');
     } else {
-      this.window.loadFile(
-        path.join(__dirname, '../../out/index.html')
-      );
+      this.window.loadFile(path.join(__dirname, '../../out/index.html'));
     }
 
-    const debug =
-      process.env.SIDECAR_DEBUG === '1';
+    const debug = process.env.SIDECAR_DEBUG === '1';
 
     if (development || debug) {
-      this.window.webContents.openDevTools({
-        mode: 'detach'
-      });
+      this.window.webContents.openDevTools({ mode: 'detach' });
     }
 
     this.applyOverlaySettings();
     this.trackBounds();
     this.registerWindowGuards();
 
-    this.window.webContents.on(
-      'did-finish-load',
-      () => {
-        console.log(
-          '[WindowManager] Renderer finished loading'
-        );
-
-        const overlay =
-          settings.get().overlay || {};
-
-        if (overlay.hidden === true) {
-          console.log(
-            '[WindowManager] Ignoring saved hidden state during debugging'
-          );
-        }
-
-        /*
-         * Force valid visibility settings while testing.
-         * Reset to a known-good centered position on the
-         * primary display so the window is never off-screen.
-         */
-        this.window.setOpacity(1);
-
-        const { workArea } =
-          screen.getPrimaryDisplay();
-
-        this.window.setBounds({
-          x: Math.round(
-            workArea.x +
-              (workArea.width - 720) / 2
-          ),
-          y: workArea.y + 20,
-          width: 720,
-          height: 650
-        });
-
-        this.applyPassiveMode();
+    this.window.webContents.on('did-finish-load', () => {
+      console.log('[WindowManager] Renderer finished loading');
+      const overlay = settings.get().overlay || {};
+      if (overlay.hidden === true) {
+        console.log('[WindowManager] Ignoring saved hidden state during debugging');
       }
-    );
 
-    this.window.webContents.on(
-      'did-fail-load',
-      (
-        _event,
-        errorCode,
-        errorDescription,
-        validatedUrl
-      ) => {
-        console.error(
-          '[WindowManager] Page failed to load:'
-        );
-        console.error(`  Error code: ${errorCode}`);
-        console.error(
-          `  Description: ${errorDescription}`
-        );
-        console.error(`  URL: ${validatedUrl}`);
-      }
-    );
+      this.window.setOpacity(1);
+      const { workArea } = screen.getPrimaryDisplay();
+      this.window.setBounds({
+        x: Math.round(workArea.x + (workArea.width - 720) / 2),
+        y: workArea.y + 20,
+        width: 720,
+        height: 650
+      });
+      this.applyPassiveMode();
+    });
 
-    this.window.webContents.on(
-      'console-message',
-      (
-        _event,
-        level,
-        message,
-        line,
-        sourceId
-      ) => {
-        if (level >= 2) {
-          console.log(
-            `[Renderer:${
-              level === 3 ? 'ERROR' : 'WARN'
-            }] ${message} (${sourceId}:${line})`
-          );
-        }
-      }
-    );
+    this.window.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedUrl) => {
+      console.error('[WindowManager] Page failed to load:');
+      console.error(`  Error code: ${errorCode}`);
+      console.error(`  Description: ${errorDescription}`);
+      console.error(`  URL: ${validatedUrl}`);
+    });
 
-    this.window.webContents.on(
-      'render-process-gone',
-      (_event, details) => {
-        console.error(
-          '[WindowManager] Renderer process crashed:',
-          JSON.stringify(details)
-        );
+    this.window.webContents.on('console-message', (_event, level, message, line, sourceId) => {
+      if (level >= 2) {
+        console.log(`[Renderer:${level === 3 ? 'ERROR' : 'WARN'}] ${message} (${sourceId}:${line})`);
       }
-    );
+    });
+
+    this.window.webContents.on('render-process-gone', (_event, details) => {
+      console.error('[WindowManager] Renderer process crashed:', JSON.stringify(details));
+    });
 
     this.window.on('closed', () => {
       this.window = null;
       this.currentMode = null;
-
       if (this._boundsTimer) {
         clearTimeout(this._boundsTimer);
         this._boundsTimer = null;
@@ -229,126 +142,50 @@ class WindowManager {
   }
 
   registerWindowGuards() {
-    if (!this.window || this.window.isDestroyed()) {
-      return;
-    }
-
-    this.window.webContents.setWindowOpenHandler(() => {
-      return { action: 'deny' };
+    if (!this.window || this.window.isDestroyed()) return;
+    this.window.webContents.setWindowOpenHandler(() => { return { action: 'deny' }; });
+    this.window.webContents.on('will-navigate', (event, targetUrl) => {
+      const currentUrl = this.window.webContents.getURL();
+      if (currentUrl && targetUrl !== currentUrl) event.preventDefault();
     });
-
-    this.window.webContents.on(
-      'will-navigate',
-      (event, targetUrl) => {
-        const currentUrl =
-          this.window.webContents.getURL();
-
-        if (
-          currentUrl &&
-          targetUrl !== currentUrl
-        ) {
-          event.preventDefault();
-        }
-      }
-    );
   }
 
   applyPassiveMode() {
-    if (!this.window || this.window.isDestroyed()) {
-      return false;
-    }
-
+    if (!this.window || this.window.isDestroyed()) return false;
     this.currentMode = WINDOW_MODE.PASSIVE;
-
-    this.window.setIgnoreMouseEvents(true, {
-      forward: true
-    });
-
+    this.window.setIgnoreMouseEvents(true, { forward: true });
     this.window.setFocusable(false);
     this.window.setSkipTaskbar(true);
-    this.window.setAlwaysOnTop(
-      true,
-      'floating'
-    );
-
+    this.window.setAlwaysOnTop(true, 'floating');
     this.window.setOpacity(1);
-
-    /*
-     * Call unconditionally. showInactive() makes the window
-     * visible without activating it or stealing keyboard focus
-     * from whatever application the user is working in.
-     */
     this.window.showInactive();
-
-    console.log('[WindowManager] Passive mode applied', {
-      visible: this.window.isVisible(),
-      bounds: this.window.getBounds(),
-      opacity: this.window.getOpacity()
-    });
-
     return true;
   }
 
   applyInteractiveMode() {
-    if (!this.window || this.window.isDestroyed()) {
-      return false;
-    }
-
+    if (!this.window || this.window.isDestroyed()) return false;
     this.currentMode = WINDOW_MODE.INTERACTIVE;
-
     this.window.setIgnoreMouseEvents(false);
     this.window.setFocusable(true);
-
-    /*
-     * Keep this true so opening settings or clicking the UI does
-     * not create a taskbar button.
-     *
-     * This is window presentation only. Windows still controls
-     * Task Manager grouping.
-     */
     this.window.setSkipTaskbar(true);
-
-    this.window.setAlwaysOnTop(
-      true,
-      'floating'
-    );
-
-    if (!this.window.isVisible()) {
-      this.window.show();
-    }
-
+    this.window.setAlwaysOnTop(true, 'floating');
+    if (!this.window.isVisible()) this.window.show();
     return true;
   }
 
   setMode(mode) {
     switch (mode) {
-      case WINDOW_MODE.PASSIVE:
-        return this.applyPassiveMode();
-
-      case WINDOW_MODE.INTERACTIVE:
-        return this.applyInteractiveMode();
-
-      default:
-        console.warn(
-          `[WindowManager] Unsupported mode: ${mode}`
-        );
-        return false;
+      case WINDOW_MODE.PASSIVE: return this.applyPassiveMode();
+      case WINDOW_MODE.INTERACTIVE: return this.applyInteractiveMode();
+      default: return false;
     }
   }
 
-  getMode() {
-    return this.currentMode;
-  }
+  getMode() { return this.currentMode; }
 
   setIgnoreMouseEvents(ignore) {
-    if (!this.window || this.window.isDestroyed()) {
-      return false;
-    }
-
-    if (ignore) {
-      return this.applyPassiveMode();
-    }
-
+    if (!this.window || this.window.isDestroyed()) return false;
+    if (ignore) return this.applyPassiveMode();
     return this.applyInteractiveMode();
   }
 
@@ -357,222 +194,79 @@ class WindowManager {
       const release = os.release();
       const parts = release.split('.');
       const build = parseInt(parts[2], 10) || 0;
-
-      console.log(
-        `[WindowManager] Windows detected, OS build: ${release} ` +
-          `(build ${build})`
-      );
-
       if (build < 19041) {
-        const warning =
-          'Content protection is limited on this Windows ' +
-          'version. Windows 10 version 2004 or later is ' +
-          'recommended.';
-
+        const warning = 'Content protection is limited on this Windows version. Windows 10 version 2004 or later is recommended.';
         console.warn(`[WindowManager] ${warning}`);
-
-        setTimeout(() => {
-          this.send('status', {
-            message: warning
-          });
-        }, 3000);
+        setTimeout(() => { this.send('status', { message: warning }); }, 3000);
       }
     } catch (error) {
-      console.warn(
-        '[WindowManager] Could not determine Windows version:',
-        error.message
-      );
+      console.warn('[WindowManager] Could not determine Windows version:', error.message);
     }
   }
 
   validBounds(bounds) {
-    if (
-      !bounds ||
-      !Number.isFinite(bounds.x) ||
-      !Number.isFinite(bounds.y) ||
-      !Number.isFinite(bounds.width) ||
-      !Number.isFinite(bounds.height)
-    ) {
-      return null;
-    }
-
-    const intersectsDisplay =
-      screen.getAllDisplays().some((display) => {
-        const area = display.workArea;
-
-        return (
-          bounds.x < area.x + area.width &&
-          bounds.x + bounds.width > area.x &&
-          bounds.y < area.y + area.height &&
-          bounds.y + bounds.height > area.y
-        );
-      });
-
+    if (!bounds || !Number.isFinite(bounds.x) || !Number.isFinite(bounds.y) || !Number.isFinite(bounds.width) || !Number.isFinite(bounds.height)) return null;
+    const intersectsDisplay = screen.getAllDisplays().some((display) => {
+      const area = display.workArea;
+      return (bounds.x < area.x + area.width && bounds.x + bounds.width > area.x && bounds.y < area.y + area.height && bounds.y + bounds.height > area.y);
+    });
     return intersectsDisplay ? bounds : null;
   }
 
   trackBounds() {
     const saveBounds = () => {
-      if (this._boundsTimer) {
-        return;
-      }
-
+      if (this._boundsTimer) return;
       this._boundsTimer = setTimeout(() => {
         this._boundsTimer = null;
-
-        if (
-          !this.window ||
-          this.window.isDestroyed()
-        ) {
-          return;
-        }
-
-        settings.set({
-          overlay: {
-            bounds: this.window.getBounds()
-          }
-        });
+        if (!this.window || this.window.isDestroyed()) return;
+        settings.set({ overlay: { bounds: this.window.getBounds() } });
       }, 800);
-
-      if (this._boundsTimer.unref) {
-        this._boundsTimer.unref();
-      }
+      if (this._boundsTimer.unref) this._boundsTimer.unref();
     };
-
     this.window.on('move', saveBounds);
     this.window.on('resize', saveBounds);
   }
 
   applyOverlaySettings() {
-    if (!this.window || this.window.isDestroyed()) {
-      return;
-    }
-
-    const overlay =
-      settings.get().overlay || {};
-
-    const opacity = Math.min(
-      1,
-      Math.max(0.25, overlay.opacity || 1)
-    );
-
+    if (!this.window || this.window.isDestroyed()) return;
+    const overlay = settings.get().overlay || {};
+    const opacity = Math.min(1, Math.max(0.25, overlay.opacity || 1));
     this.window.setOpacity(opacity);
-
-    this.send('overlay:style', {
-      fontScale: overlay.fontScale || 1,
-      density:
-        overlay.density || 'comfortable'
-    });
+    this.send('overlay:style', { fontScale: overlay.fontScale || 1, density: overlay.density || 'comfortable' });
   }
 
   toggleVisibility() {
-    if (!this.window || this.window.isDestroyed()) {
-      return false;
-    }
-
-    const currentlyVisible =
-      this.window.isVisible();
-
-    if (currentlyVisible) {
-      this.window.hide();
-    } else {
-      this.applyPassiveMode();
-      this.window.showInactive();
-    }
-
-    settings.set({
-      overlay: {
-        hidden: currentlyVisible
-      }
-    });
-
+    if (!this.window || this.window.isDestroyed()) return false;
+    const currentlyVisible = this.window.isVisible();
+    if (currentlyVisible) this.window.hide();
+    else { this.applyPassiveMode(); this.window.showInactive(); }
+    settings.set({ overlay: { hidden: currentlyVisible } });
     return !currentlyVisible;
   }
 
   placeOn(displayId, position = 'top-center') {
-    if (!this.window || this.window.isDestroyed()) {
-      return;
-    }
-
-    const display =
-      screen
-        .getAllDisplays()
-        .find(
-          (item) =>
-            String(item.id) ===
-            String(displayId)
-        ) || screen.getPrimaryDisplay();
-
+    if (!this.window || this.window.isDestroyed()) return;
+    const display = screen.getAllDisplays().find((item) => String(item.id) === String(displayId)) || screen.getPrimaryDisplay();
     const workArea = display.workArea;
-    const { width, height } =
-      this.window.getBounds();
-
+    const { width, height } = this.window.getBounds();
     const positions = {
-      'top-center': {
-        x:
-          workArea.x +
-          Math.round(
-            (workArea.width - width) / 2
-          ),
-        y: workArea.y + 10
-      },
-
-      'top-left': {
-        x: workArea.x + 10,
-        y: workArea.y + 10
-      },
-
-      'top-right': {
-        x:
-          workArea.x +
-          workArea.width -
-          width -
-          10,
-        y: workArea.y + 10
-      },
-
-      'bottom-center': {
-        x:
-          workArea.x +
-          Math.round(
-            (workArea.width - width) / 2
-          ),
-        y:
-          workArea.y +
-          workArea.height -
-          height -
-          10
-      }
+      'top-center': { x: workArea.x + Math.round((workArea.width - width) / 2), y: workArea.y + 10 },
+      'top-left': { x: workArea.x + 10, y: workArea.y + 10 },
+      'top-right': { x: workArea.x + workArea.width - width - 10, y: workArea.y + 10 },
+      'bottom-center': { x: workArea.x + Math.round((workArea.width - width) / 2), y: workArea.y + workArea.height - height - 10 }
     };
-
-    const target =
-      positions[position] ||
-      positions['top-center'];
-
-    this.window.setBounds({
-      ...target,
-      width,
-      height
-    });
-
-    settings.set({
-      overlay: {
-        bounds: this.window.getBounds()
-      }
-    });
+    const target = positions[position] || positions['top-center'];
+    this.window.setBounds({ ...target, width, height });
+    settings.set({ overlay: { bounds: this.window.getBounds() } });
   }
 
   openRegionPicker() {
-    if (
-      this.regionWindow &&
-      !this.regionWindow.isDestroyed()
-    ) {
+    if (this.regionWindow && !this.regionWindow.isDestroyed()) {
       this.regionWindow.focus();
       return this.regionPromise;
     }
 
-    const { bounds } =
-      screen.getPrimaryDisplay();
+    const { bounds } = screen.getPrimaryDisplay();
 
     this.regionWindow = new BrowserWindow({
       x: bounds.x,
@@ -588,12 +282,8 @@ class WindowManager {
       skipTaskbar: true,
       alwaysOnTop: true,
       fullscreenable: false,
-
       webPreferences: {
-        preload: path.join(
-          __dirname,
-          '../preload/index.js'
-        ),
+        preload: path.join(__dirname, '../preload/index.js'),
         contextIsolation: true,
         nodeIntegration: false,
         sandbox: false,
@@ -601,45 +291,38 @@ class WindowManager {
       }
     });
 
-    this.regionWindow.setAlwaysOnTop(
-      true,
-      'screen-saver',
-      2
-    );
+    this.regionWindow.setAlwaysOnTop(true, 'screen-saver', 2);
 
-    if (
-      process.env.NODE_ENV === 'development'
-    ) {
-      this.regionWindow.loadURL(
-        'http://localhost:5173/region.html'
-      );
-    } else {
-      this.regionWindow.loadFile(
-        path.join(
-          __dirname,
-          '../../out/region.html'
-        )
-      );
+    // =====================================================================
+    // 🛡️ CRITICAL STEALTH FIX: Protect the Region Selector
+    // We must apply the native C++ display affinity hook to the region 
+    // picker as well, otherwise this fullscreen window leaks to Zoom/Teams.
+    // =====================================================================
+    const disableContentProtection = Boolean(process.env.SIDECAR_NO_PROTECT);
+    if (!disableContentProtection) {
+      try {
+        const DisplayAdapter = require('../../DisplayAdapter');
+        DisplayAdapter.protectWindow(this.regionWindow);
+      } catch (err) {
+        console.error('[WindowManager] Failed to apply native display affinity to region picker:', err.message);
+        this.regionWindow.setContentProtection(true);
+      }
     }
 
-    this.regionPromise = new Promise(
-      (resolve) => {
-        this._resolveRegion = resolve;
-      }
-    );
+    if (process.env.NODE_ENV === 'development') {
+      this.regionWindow.loadURL('http://localhost:5173/region.html');
+    } else {
+      this.regionWindow.loadFile(path.join(__dirname, '../../out/region.html'));
+    }
+
+    this.regionPromise = new Promise((resolve) => { this._resolveRegion = resolve; });
 
     this.regionWindow.on('closed', () => {
       this.regionWindow = null;
-
       if (this._resolveRegion) {
         this._resolveRegion(null);
         this._resolveRegion = null;
       }
-
-      /*
-       * The region picker is interactive, but the main window
-       * returns to passive mode after it closes.
-       */
       this.applyPassiveMode();
     });
 
@@ -651,51 +334,29 @@ class WindowManager {
       this._resolveRegion(region);
       this._resolveRegion = null;
     }
-
-    if (
-      this.regionWindow &&
-      !this.regionWindow.isDestroyed()
-    ) {
+    if (this.regionWindow && !this.regionWindow.isDestroyed()) {
       this.regionWindow.close();
     }
   }
 
   listDisplays() {
-    const primaryDisplay =
-      screen.getPrimaryDisplay();
-
-    return screen
-      .getAllDisplays()
-      .map((display, index) => ({
-        id: String(display.id),
-        label:
-          `Display ${index + 1} ` +
-          `(${display.size.width}x${display.size.height})`,
-        primary:
-          display.id === primaryDisplay.id
-      }));
+    const primaryDisplay = screen.getPrimaryDisplay();
+    return screen.getAllDisplays().map((display, index) => ({
+      id: String(display.id),
+      label: `Display ${index + 1} (${display.size.width}x${display.size.height})`,
+      primary: display.id === primaryDisplay.id
+    }));
   }
 
   send(channel, payload) {
-    if (
-      this.window &&
-      !this.window.isDestroyed() &&
-      !this.window.webContents.isDestroyed()
-    ) {
-      this.window.webContents.send(
-        channel,
-        payload
-      );
+    if (this.window && !this.window.isDestroyed() && !this.window.webContents.isDestroyed()) {
+      this.window.webContents.send(channel, payload);
     }
   }
 
-  getWindow() {
-    return this.window;
-  }
+  getWindow() { return this.window; }
 }
 
 const windowManager = new WindowManager();
-
 windowManager.WINDOW_MODE = WINDOW_MODE;
-
 module.exports = windowManager;
