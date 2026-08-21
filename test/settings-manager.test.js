@@ -8,11 +8,11 @@ const require = createRequire(import.meta.url);
 
 let tmpDir;
 
-/**
- * Load SettingsManager with a stubbed `electron` module pointing at a temp userData
- * directory. safeStorage reports unavailable, so keys stay plaintext — the migration
- * and redaction behaviour under test is independent of the OS keychain.
- */
+
+
+
+
+
 function loadSettings() {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sidecar-test-'));
   const electronPath = require.resolve('electron');
@@ -46,7 +46,7 @@ describe('SettingsManager', () => {
     try {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     } catch (e) {
-      /* best effort */
+
     }
   });
 
@@ -140,7 +140,7 @@ describe('SettingsManager', () => {
   });
 });
 
-/** Re-load the module against an existing temp dir, simulating an app restart. */
+
 function loadSettingsFrom(dir) {
   const electronPath = require.resolve('electron');
   require.cache[electronPath].exports.app.getPath = () => dir;

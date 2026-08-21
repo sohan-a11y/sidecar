@@ -13,12 +13,12 @@ let SettingsManager;
 let RateLimiter;
 
 const MODULES = [
-  '../src/main/QuestionDetector.js',
-  '../src/main/AutoAnswer.js',
-  '../src/main/SettingsManager.js',
-  '../src/main/RateLimiter.js',
-  '../src/main/KeyStore.js'
-];
+'../src/main/QuestionDetector.js',
+'../src/main/AutoAnswer.js',
+'../src/main/SettingsManager.js',
+'../src/main/RateLimiter.js',
+'../src/main/KeyStore.js'];
+
 
 function boot() {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sidecar-auto-'));
@@ -45,7 +45,7 @@ describe('QuestionDetector', () => {
     try {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     } catch (e) {
-      /* ignore */
+
     }
   });
 
@@ -131,12 +131,12 @@ describe('AutoAnswer interlock', () => {
     try {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     } catch (e) {
-      /* ignore */
+
     }
   });
 
   const ask = (text, extra = {}) =>
-    AutoAnswer.consider({ text, isFinal: true, silenceMs: 1500, ...extra }, 'openai');
+  AutoAnswer.consider({ text, isFinal: true, silenceMs: 1500, ...extra }, 'openai');
   const settle = () => new Promise((r) => setTimeout(r, 30));
 
   it('does nothing at all when disabled', async () => {
@@ -172,10 +172,10 @@ describe('AutoAnswer interlock', () => {
     SettingsManager.set({ autoAnswer: { cooldownMs: 0, maxPerMinute: 2 } });
 
     for (const q of [
-      'What is your weakness?',
-      'Why did you leave?',
-      'How do you handle conflict?'
-    ]) {
+    'What is your weakness?',
+    'Why did you leave?',
+    'How do you handle conflict?'])
+    {
       ask(q);
       await settle();
     }
@@ -184,7 +184,7 @@ describe('AutoAnswer interlock', () => {
 
   it('will not spend the last of the daily budget', async () => {
     RateLimiter.configure({ openai: { rpm: 60, rpd: 3 } });
-    await RateLimiter.schedule('openai', {}, async () => 'x'); // 1 of 3 spent
+    await RateLimiter.schedule('openai', {}, async () => 'x');
 
     ask('What is your greatest weakness?');
     await settle();
@@ -193,7 +193,7 @@ describe('AutoAnswer interlock', () => {
 
   it('is cancelled by a manual request standing it down', async () => {
     ask('Tell me about a time you failed');
-    AutoAnswer.standDown(); // a hotkey press
+    AutoAnswer.standDown();
     await settle();
     expect(fired).toHaveLength(0);
   });

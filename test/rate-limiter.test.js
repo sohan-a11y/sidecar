@@ -4,7 +4,7 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const modulePath = require.resolve('../src/main/RateLimiter.js');
 
-/** Fresh singleton per test — the module caches one instance. */
+
 function freshLimiter() {
   delete require.cache[modulePath];
   return require('../src/main/RateLimiter.js');
@@ -15,7 +15,7 @@ describe('RateLimiter', () => {
 
   beforeEach(() => {
     limiter = freshLimiter();
-    limiter.backoffBaseMs = 1; // no test should sit through real exponential backoff
+    limiter.backoffBaseMs = 1;
   });
 
   it('runs user-priority work before queued auto work', async () => {
@@ -24,13 +24,13 @@ describe('RateLimiter', () => {
     let clock = 0;
     limiter.now = () => clock;
 
-    // First call consumes the only slot in the window.
+
     const first = limiter.schedule('p', { priority: 'auto' }, async () => {
       order.push('auto1');
     });
     await first;
 
-    // These two queue behind the window; user must jump the earlier auto job.
+
     const queuedAuto = limiter.schedule('p', { priority: 'auto' }, async () => {
       order.push('auto2');
     });
@@ -38,7 +38,7 @@ describe('RateLimiter', () => {
       order.push('user1');
     });
 
-    clock += 61 * 1000; // next minute window
+    clock += 61 * 1000;
     limiter.configure({ p: { rpm: 10, rpd: 10 } });
     limiter._pump('p');
     await Promise.all([queuedAuto, queuedUser]);
@@ -96,7 +96,7 @@ describe('RateLimiter', () => {
       })
     ).rejects.toThrow('upstream exploded');
 
-    expect(attempts).toBe(4); // initial + 3 retries
+    expect(attempts).toBe(4);
   });
 
   it('does not retry once output has been emitted', async () => {
@@ -107,7 +107,7 @@ describe('RateLimiter', () => {
     await expect(
       limiter.schedule('p', { canRetry: () => !emitted }, async () => {
         attempts += 1;
-        emitted = true; // pretend a token reached the UI
+        emitted = true;
         const err = new Error('died mid-stream');
         err.status = 500;
         throw err;

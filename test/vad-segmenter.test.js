@@ -3,18 +3,18 @@ import { createSegmenter } from '../src/renderer/lib/vadSegmenter.js';
 
 const FRAME = 1024;
 const RATE = 16000;
-const FRAME_MS = (FRAME / RATE) * 1000; // 64 ms
+const FRAME_MS = FRAME / RATE * 1000;
 
 function frame(amplitude) {
   const buf = new Float32Array(FRAME);
   for (let i = 0; i < FRAME; i += 1) {
-    // Alternating sign gives a stable RMS equal to the amplitude.
+
     buf[i] = i % 2 === 0 ? amplitude : -amplitude;
   }
   return buf;
 }
 
-/** Feed n frames, collecting every boundary the segmenter reports. */
+
 function feed(segmenter, amplitude, count) {
   const events = [];
   for (let i = 0; i < count; i += 1) {
@@ -41,7 +41,7 @@ describe('VAD segmenter', () => {
     expect(feed(vad, SPEECH, 10)).toEqual(['start']);
     expect(vad.isSpeaking()).toBe(true);
 
-    // Hangover is 700 ms; ~11 frames of silence must close it.
+
     const events = feed(vad, SILENCE, 15);
     expect(events).toEqual(['end']);
     expect(vad.isSpeaking()).toBe(false);
@@ -52,7 +52,7 @@ describe('VAD segmenter', () => {
     feed(vad, SILENCE, 20);
     feed(vad, SPEECH, 10);
 
-    // ~320 ms of quiet, well inside the 700 ms hangover.
+
     expect(feed(vad, SILENCE, 5)).toEqual([]);
     expect(vad.isSpeaking()).toBe(true);
 
@@ -64,7 +64,7 @@ describe('VAD segmenter', () => {
     const vad = createSegmenter({ minSpeechMs: 400, hangoverMs: 200 });
     feed(vad, SILENCE, 20);
 
-    feed(vad, SPEECH, 1); // 64 ms
+    feed(vad, SPEECH, 1);
     const events = feed(vad, SILENCE, 6);
     expect(events).toEqual(['abort']);
   });
@@ -73,7 +73,7 @@ describe('VAD segmenter', () => {
     const vad = createSegmenter({ maxSegmentMs: 1000 });
     feed(vad, SILENCE, 20);
 
-    const events = feed(vad, SPEECH, 30); // ~1.9 s of continuous speech
+    const events = feed(vad, SPEECH, 30);
     expect(events[0]).toBe('start');
     expect(events).toContain('end');
   });
@@ -83,9 +83,9 @@ describe('VAD segmenter', () => {
     const noisy = createSegmenter();
 
     feed(quiet, 0.002, 60);
-    feed(noisy, 0.05, 60); // constant background hiss
+    feed(noisy, 0.05, 60);
 
-    // A voice at 0.03 is speech in a quiet room and background in a loud one.
+
     expect(feed(quiet, 0.03, 3)).toEqual(['start']);
     expect(feed(noisy, 0.03, 3)).toEqual([]);
     expect(noisy.levels().noiseFloor).toBeGreaterThan(quiet.levels().noiseFloor);

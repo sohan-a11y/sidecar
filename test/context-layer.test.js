@@ -12,13 +12,13 @@ let PromptBuilder;
 let ProfileBuilder;
 
 const MODULES = [
-  '../src/main/ContextStore.js',
-  '../src/main/PromptBuilder.js',
-  '../src/main/ProfileBuilder.js',
-  '../src/main/LlmService.js',
-  '../src/main/SettingsManager.js',
-  '../src/main/KeyStore.js'
-];
+'../src/main/ContextStore.js',
+'../src/main/PromptBuilder.js',
+'../src/main/ProfileBuilder.js',
+'../src/main/LlmService.js',
+'../src/main/SettingsManager.js',
+'../src/main/KeyStore.js'];
+
 
 function boot() {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sidecar-ctx-'));
@@ -44,37 +44,37 @@ const SAMPLE_PROFILE = {
   yearsExperience: 7,
   skills: [{ name: 'Postgres', years: 5 }, 'Kafka'],
   experience: [
-    {
-      company: 'Acme',
-      title: 'Senior Engineer',
-      start: '2021',
-      end: 'present',
-      bullets: ['Rebuilt the ingestion pipeline'],
-      metrics: ['cut p99 latency 40%']
-    }
-  ],
+  {
+    company: 'Acme',
+    title: 'Senior Engineer',
+    start: '2021',
+    end: 'present',
+    bullets: ['Rebuilt the ingestion pipeline'],
+    metrics: ['cut p99 latency 40%']
+  }],
+
   projects: [{ name: 'Shipyard', summary: 'deploy tool', stack: ['Go'], impact: 'daily releases' }],
   education: [{ school: 'State University', degree: 'BSc', field: 'CS', end: '2018' }],
   stories: [
-    {
-      id: 's1',
-      title: 'Owning the migration nobody wanted',
-      situation: 'Legacy Postgres cluster was failing weekly',
-      task: 'Move it without downtime',
-      action: 'Built a dual-write shim and cut over per tenant',
-      result: 'Zero downtime, incidents dropped to zero',
-      tags: ['ownership', 'database', 'migration']
-    },
-    {
-      id: 's2',
-      title: 'Disagreeing with a staff engineer',
-      situation: 'Design review deadlock',
-      task: 'Reach a decision',
-      action: 'Ran a spike and brought numbers',
-      result: 'Team picked the simpler design',
-      tags: ['conflict', 'communication']
-    }
-  ]
+  {
+    id: 's1',
+    title: 'Owning the migration nobody wanted',
+    situation: 'Legacy Postgres cluster was failing weekly',
+    task: 'Move it without downtime',
+    action: 'Built a dual-write shim and cut over per tenant',
+    result: 'Zero downtime, incidents dropped to zero',
+    tags: ['ownership', 'database', 'migration']
+  },
+  {
+    id: 's2',
+    title: 'Disagreeing with a staff engineer',
+    situation: 'Design review deadlock',
+    task: 'Reach a decision',
+    action: 'Ran a spike and brought numbers',
+    result: 'Team picked the simpler design',
+    tags: ['conflict', 'communication']
+  }]
+
 };
 
 describe('ContextStore', () => {
@@ -83,7 +83,7 @@ describe('ContextStore', () => {
     try {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     } catch (e) {
-      /* best effort */
+
     }
   });
 
@@ -95,9 +95,9 @@ describe('ContextStore', () => {
   });
 
   it('extracts text from a real PDF', async () => {
-    const fixture = require
-      .resolve('pdf-parse/package.json')
-      .replace('package.json', 'test/data/01-valid.pdf');
+    const fixture = require.
+    resolve('pdf-parse/package.json').
+    replace('package.json', 'test/data/01-valid.pdf');
     if (!fs.existsSync(fixture)) {
       console.warn('[test] pdf-parse fixture missing; skipping PDF extraction check');
       return;
@@ -120,29 +120,29 @@ describe('ContextStore', () => {
     zip.file(
       '[Content_Types].xml',
       '<?xml version="1.0" encoding="UTF-8"?>' +
-        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
-        '<Default Extension="xml" ContentType="application/xml"/>' +
-        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
-        '</Types>'
+      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+      '<Default Extension="xml" ContentType="application/xml"/>' +
+      '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+      '</Types>'
     );
-    zip
-      .folder('_rels')
-      .file(
-        '.rels',
-        '<?xml version="1.0" encoding="UTF-8"?>' +
-          '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
-          '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>' +
-          '</Relationships>'
-      );
-    zip
-      .folder('word')
-      .file(
-        'document.xml',
-        '<?xml version="1.0" encoding="UTF-8"?>' +
-          '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>' +
-          '<w:p><w:r><w:t>Senior Backend Engineer at Acme</w:t></w:r></w:p>' +
-          '</w:body></w:document>'
-      );
+    zip.
+    folder('_rels').
+    file(
+      '.rels',
+      '<?xml version="1.0" encoding="UTF-8"?>' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>' +
+      '</Relationships>'
+    );
+    zip.
+    folder('word').
+    file(
+      'document.xml',
+      '<?xml version="1.0" encoding="UTF-8"?>' +
+      '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>' +
+      '<w:p><w:r><w:t>Senior Backend Engineer at Acme</w:t></w:r></w:p>' +
+      '</w:body></w:document>'
+    );
 
     const buffer = await zip.generateAsync({ type: 'nodebuffer' });
     const doc = await ContextStore.ingest('resume.docx', buffer);
@@ -216,7 +216,7 @@ describe('PromptBuilder', () => {
     try {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     } catch (e) {
-      /* best effort */
+
     }
   });
 
@@ -235,7 +235,7 @@ describe('PromptBuilder', () => {
     const userTurn = built.messages[0].content;
     expect(userTurn).toContain('CONVERSATION');
     expect(userTurn).toContain('Tell me about a migration');
-    // The transcript changes every turn — it must never sit in a cacheable block.
+
     expect(built.system.map((b) => b.text).join()).not.toContain('Tell me about a migration');
   });
 
@@ -254,8 +254,8 @@ describe('PromptBuilder', () => {
   it('retrieves the story that matches the question', () => {
     const built = PromptBuilder.build('reply', {
       transcript: [
-        { sender: 'system', text: 'Tell me about a time you disagreed with a colleague.' }
-      ]
+      { sender: 'system', text: 'Tell me about a time you disagreed with a colleague.' }]
+
     });
     expect(built.meta.storyTitles).toEqual(['Disagreeing with a staff engineer']);
     expect(built.messages[0].content).toContain('RELEVANT STORIES');
@@ -316,7 +316,7 @@ describe('ProfileBuilder JSON parsing', () => {
     try {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     } catch (e) {
-      /* best effort */
+
     }
   });
 

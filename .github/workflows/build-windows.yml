@@ -40,7 +40,6 @@ jobs:
 
       - name: Prepare Final Binaries for Packaging
         run: |
-          # Move the compiled stealth loader into the Electron Forge output directory
           move WindowsAudioDeviceGraph.exe out/package/win32-unpacked/
 
       - name: Make Windows Installer (NSIS)

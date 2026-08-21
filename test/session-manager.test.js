@@ -12,11 +12,11 @@ let SettingsManager;
 let ContextStore;
 
 const MODULES = [
-  '../src/main/SessionManager.js',
-  '../src/main/SettingsManager.js',
-  '../src/main/ContextStore.js',
-  '../src/main/KeyStore.js'
-];
+'../src/main/SessionManager.js',
+'../src/main/SettingsManager.js',
+'../src/main/ContextStore.js',
+'../src/main/KeyStore.js'];
+
 
 function boot(dir) {
   tmpDir = dir || fs.mkdtempSync(path.join(os.tmpdir(), 'sidecar-sess-'));
@@ -38,7 +38,7 @@ function boot(dir) {
 }
 
 const say = (sender, text, extra = {}) =>
-  SessionManager.upsertTurn({ sender, channel: sender, text, ...extra });
+SessionManager.upsertTurn({ sender, channel: sender, text, ...extra });
 
 describe('SessionManager', () => {
   beforeEach(() => boot());
@@ -46,7 +46,7 @@ describe('SessionManager', () => {
     try {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     } catch (e) {
-      /* best effort */
+
     }
   });
 
@@ -127,7 +127,7 @@ describe('SessionManager', () => {
     SessionManager.persist(true);
 
     const dir = tmpDir;
-    boot(dir); // simulate relaunch
+    boot(dir);
     const recovered = SessionManager.recover();
 
     expect(recovered).not.toBeNull();

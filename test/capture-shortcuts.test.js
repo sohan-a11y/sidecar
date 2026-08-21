@@ -14,11 +14,11 @@ let registered;
 let ownedByOthers;
 
 const MODULES = [
-  '../src/main/MediaCapture.js',
-  '../src/main/ShortcutsManager.js',
-  '../src/main/SettingsManager.js',
-  '../src/main/KeyStore.js'
-];
+'../src/main/MediaCapture.js',
+'../src/main/ShortcutsManager.js',
+'../src/main/SettingsManager.js',
+'../src/main/KeyStore.js'];
+
 
 function boot() {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sidecar-cap-'));
@@ -45,7 +45,7 @@ function boot() {
           return true;
         },
         isRegistered: (accelerator) =>
-          ownedByOthers.has(accelerator) || registered.includes(accelerator),
+        ownedByOthers.has(accelerator) || registered.includes(accelerator),
         unregisterAll: () => {
           registered = [];
         }
@@ -58,14 +58,14 @@ function boot() {
   ShortcutsManager = require('../src/main/ShortcutsManager.js');
 }
 
-/** Stand-in for an Electron NativeImage: 8x8 BGRA after resize. */
+
 function fakeImage(bytes) {
   return {
     resize: () => ({ toBitmap: () => Buffer.from(bytes) })
   };
 }
 
-/** Flat 8x8 image where the first `brightCount` pixels are white and the rest black. */
+
 function gradient(brightCount) {
   const bytes = [];
   for (let i = 0; i < 64; i += 1) {
@@ -81,7 +81,7 @@ describe('capture change detection', () => {
     try {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     } catch (e) {
-      /* ignore */
+
     }
   });
 
@@ -120,7 +120,7 @@ describe('shortcut registration', () => {
     try {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     } catch (e) {
-      /* ignore */
+
     }
   });
 

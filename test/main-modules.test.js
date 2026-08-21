@@ -8,11 +8,11 @@ const require = createRequire(import.meta.url);
 
 let tmpDir;
 
-/**
- * Electron cannot run headless here, so this stands in for the "does the main process
- * even load" half of the smoke test: every module is required against a stubbed
- * electron, and IpcRouter.initialize() is run to prove every handler wires up.
- */
+
+
+
+
+
 const handlers = { invoke: {}, on: {} };
 const sent = [];
 
@@ -50,26 +50,26 @@ afterAll(() => {
   try {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   } catch (e) {
-    /* best effort */
+
   }
 });
 
 describe('main process modules', () => {
-  // ContextStore pulls in pdf-parse, which loads a ~6 MB pdf.js bundle. Under parallel
-  // test load that can exceed the 5 s default and fail for no real reason.
+
+
   it('all load without throwing', { timeout: 30000 }, () => {
     const modules = [
-      '../src/main/KeyStore.js',
-      '../src/main/RateLimiter.js',
-      '../src/main/SettingsManager.js',
-      '../src/main/MediaCapture.js',
-      '../src/main/WindowManager.js',
-      '../src/main/ShortcutsManager.js',
-      '../src/main/TranscriptionService.js',
-      '../src/main/LlmService.js',
-      '../src/main/IpcRouter.js',
-      '../src/main/providers/index.js'
-    ];
+    '../src/main/KeyStore.js',
+    '../src/main/RateLimiter.js',
+    '../src/main/SettingsManager.js',
+    '../src/main/MediaCapture.js',
+    '../src/main/WindowManager.js',
+    '../src/main/ShortcutsManager.js',
+    '../src/main/TranscriptionService.js',
+    '../src/main/LlmService.js',
+    '../src/main/IpcRouter.js',
+    '../src/main/providers/index.js'];
+
     for (const mod of modules) {
       expect(() => require(mod), `${mod} should load`).not.toThrow();
     }
@@ -83,21 +83,21 @@ describe('main process modules', () => {
     IpcRouter.initialize();
 
     for (const channel of [
-      'sidecar:settings:get',
-      'sidecar:settings:set',
-      'sidecar:models:list',
-      'sidecar:usage:get',
-      'sidecar:toggle-listening'
-    ]) {
+    'sidecar:settings:get',
+    'sidecar:settings:set',
+    'sidecar:models:list',
+    'sidecar:usage:get',
+    'sidecar:toggle-listening'])
+    {
       expect(Object.keys(handlers.invoke)).toContain(channel);
     }
     for (const channel of [
-      'sidecar:audio-chunk',
-      'sidecar:run-mode',
-      'sidecar:mouse-ignore',
-      'sidecar:open-url',
-      'sidecar:log'
-    ]) {
+    'sidecar:audio-chunk',
+    'sidecar:run-mode',
+    'sidecar:mouse-ignore',
+    'sidecar:open-url',
+    'sidecar:log'])
+    {
       expect(Object.keys(handlers.on)).toContain(channel);
     }
   });
@@ -111,16 +111,18 @@ describe('main process modules', () => {
 
   it('whitelists every channel main actually sends to the renderer', () => {
     const preload = fs.readFileSync(new URL('../src/preload/index.js', import.meta.url), 'utf8');
-    const mainSources = ['IpcRouter.js', 'WindowManager.js']
-      .map((f) => fs.readFileSync(new URL(`../src/main/${f}`, import.meta.url), 'utf8'))
-      .join('\n');
+    const mainSources = ['IpcRouter.js', 'WindowManager.js'].
+    map((f) => fs.readFileSync(new URL(`../src/main/${f}`, import.meta.url), 'utf8')).
+    join('\n');
 
     const sentChannels = new Set(
-      [...mainSources.matchAll(/send\(\s*'([a-z:]+)'/g)].map((m) => m[1])
+      [...mainSources.matchAll(/send\(\s*['"]([a-z:]+)['"]/g)].map((m) => m[1])
     );
 
     for (const channel of sentChannels) {
-      expect(preload, `preload must whitelist "${channel}"`).toContain(`'${channel}'`);
+      expect(preload, `preload must whitelist "${channel}"`).toMatch(
+        new RegExp(`['"]${channel}['"]`)
+      );
     }
     expect(sentChannels.size).toBeGreaterThan(4);
   });
