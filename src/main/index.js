@@ -4,9 +4,6 @@ const ShortcutsManager = require("./ShortcutsManager");
 const IpcRouter = require("./IpcRouter");
 const settings = require("./SettingsManager");
 
-// WE REMOVED app.disableHardwareAcceleration() HERE!
-// Hardware acceleration MUST be on for transparent windows to render correctly on Windows.
-
 if (process.platform === "darwin" && app.dock) {
   app.dock.hide();
 }
