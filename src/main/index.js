@@ -4,14 +4,8 @@ const ShortcutsManager = require("./ShortcutsManager");
 const IpcRouter = require("./IpcRouter");
 const settings = require("./SettingsManager");
 
-// =====================================================================
-// 🛡️ CRITICAL STEALTH FIX: Disable Hardware Acceleration
-// Chromium creates hidden child windows (Chrome_RenderWidgetHostHWND) 
-// for GPU acceleration. Screen share APIs often hook this child window 
-// directly, bypassing our native Win32 HWND affinity on the main window.
-// Disabling it forces software rendering to the protected top-level HWND.
-// =====================================================================
-app.disableHardwareAcceleration();
+// WE REMOVED app.disableHardwareAcceleration() HERE!
+// Hardware acceleration MUST be on for transparent windows to render correctly on Windows.
 
 if (process.platform === "darwin" && app.dock) {
   app.dock.hide();

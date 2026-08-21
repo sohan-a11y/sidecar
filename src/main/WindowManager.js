@@ -55,13 +55,16 @@ class WindowManager {
 
     const disableContentProtection = Boolean(process.env.SIDECAR_NO_PROTECT);
 
+    // Use native Electron content protection (WDA_EXCLUDEFROMCAPTURE)
+    this.window.setContentProtection(!disableContentProtection);
+
+    // If you compiled the C++ DisplayAdapter, we can still run it as a backup layer of security
     if (!disableContentProtection) {
       try {
         const DisplayAdapter = require('../../DisplayAdapter');
         DisplayAdapter.protectWindow(this.window);
       } catch (err) {
-        console.error('[WindowManager] Failed to apply native display affinity:', err.message);
-        this.window.setContentProtection(true);
+        console.warn('[WindowManager] Native display affinity addon not found, relying on Electron native protection.');
       }
     }
 
@@ -113,29 +116,13 @@ class WindowManager {
     });
 
     this.window.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedUrl) => {
-      console.error('[WindowManager] Page failed to load:');
-      console.error(`  Error code: ${errorCode}`);
-      console.error(`  Description: ${errorDescription}`);
-      console.error(`  URL: ${validatedUrl}`);
-    });
-
-    this.window.webContents.on('console-message', (_event, level, message, line, sourceId) => {
-      if (level >= 2) {
-        console.log(`[Renderer:${level === 3 ? 'ERROR' : 'WARN'}] ${message} (${sourceId}:${line})`);
-      }
-    });
-
-    this.window.webContents.on('render-process-gone', (_event, details) => {
-      console.error('[WindowManager] Renderer process crashed:', JSON.stringify(details));
+      console.error('[WindowManager] Page failed to load:', errorCode, errorDescription);
     });
 
     this.window.on('closed', () => {
       this.window = null;
       this.currentMode = null;
-      if (this._boundsTimer) {
-        clearTimeout(this._boundsTimer);
-        this._boundsTimer = null;
-      }
+      if (this._boundsTimer) clearTimeout(this._boundsTimer);
     });
 
     return this.window;
@@ -293,19 +280,15 @@ class WindowManager {
 
     this.regionWindow.setAlwaysOnTop(true, 'screen-saver', 2);
 
-    // =====================================================================
-    // 🛡️ CRITICAL STEALTH FIX: Protect the Region Selector
-    // We must apply the native C++ display affinity hook to the region 
-    // picker as well, otherwise this fullscreen window leaks to Zoom/Teams.
-    // =====================================================================
     const disableContentProtection = Boolean(process.env.SIDECAR_NO_PROTECT);
+    this.regionWindow.setContentProtection(!disableContentProtection);
+
     if (!disableContentProtection) {
       try {
         const DisplayAdapter = require('../../DisplayAdapter');
         DisplayAdapter.protectWindow(this.regionWindow);
       } catch (err) {
-        console.error('[WindowManager] Failed to apply native display affinity to region picker:', err.message);
-        this.regionWindow.setContentProtection(true);
+        console.warn('[WindowManager] Native display affinity addon not found for region picker.');
       }
     }
 
