@@ -1,1 +1,198 @@
-var g=Object.create,x=Object.defineProperty,h=Object.getOwnPropertyDescriptor,w=Object.getOwnPropertyNames,v=Object.getPrototypeOf,b=Object.prototype.hasOwnProperty,S=(n,s,r,d)=>{if(s&&typeof s=="object"||typeof s=="function")for(let p of w(s))!b.call(n,p)&&p!==r&&x(n,p,{get:()=>s[p],enumerable:!(d=h(s,p))||d.enumerable});return n},u=(n,s,r)=>(r=n!=null?g(v(n)):{},S(s||!n||!n.__esModule?x(r,"default",{value:n,enumerable:!0}):r,n)),t=require("vitest"),j=require("node:module"),m=u(require("node:fs")),B=u(require("node:os")),f=u(require("node:path"));const T={},a=(0,j.createRequire)(T.url);let i,e,c,l;const k=["../src/main/SessionManager.js","../src/main/SettingsManager.js","../src/main/ContextStore.js","../src/main/KeyStore.js"];function y(n){i=n||m.default.mkdtempSync(f.default.join(B.default.tmpdir(),"sidecar-sess-"));const s=a.resolve("electron");a.cache[s]={id:s,filename:s,loaded:!0,exports:{app:{getPath:()=>i},safeStorage:{isEncryptionAvailable:()=>!1}}};for(const r of k)delete a.cache[a.resolve(r)];c=a("../src/main/SettingsManager.js"),l=a("../src/main/ContextStore.js"),e=a("../src/main/SessionManager.js"),e.init(i)}const o=(n,s,r={})=>e.upsertTurn({sender:n,channel:n,text:s,...r});(0,t.describe)("SessionManager",()=>{(0,t.beforeEach)(()=>y()),(0,t.afterEach)(()=>{try{m.default.rmSync(i,{recursive:!0,force:!0})}catch{}}),(0,t.it)("snapshots the interview context into the session",()=>{l.setSession({role:"Staff Engineer",company:"Globex"});const n=e.start();(0,t.expect)(n.title).toBe("Staff Engineer at Globex"),(0,t.expect)(n.context.company).toBe("Globex"),(0,t.expect)(e.isActive()).toBe(!0)}),(0,t.it)("replaces an interim turn in place instead of appending",()=>{e.start();const n=o("system","tell me about a",{interim:!0}),s=o("system","tell me about a migration",{interim:!1});(0,t.expect)(s.id).toBe(n.id),(0,t.expect)(e.transcriptView()).toHaveLength(1),(0,t.expect)(e.finalTurns()[0].text).toBe("tell me about a migration")}),(0,t.it)("keeps interim turns off disk",()=>{e.start(),o("system","final line"),o("user","still speaking",{interim:!0}),e.persist(!0);const n=JSON.parse(m.default.readFileSync(f.default.join(i,"sessions",`${e.current().id}.json`),"utf8"));(0,t.expect)(n.transcript).toHaveLength(1),(0,t.expect)(n.transcript[0].text).toBe("final line")}),(0,t.it)("bounds the prompt window by turn count",()=>{c.set({transcript:{windowTurns:5,maxPromptTokens:1e5}}),e.start();for(let s=0;s<20;s+=1)o("system",`turn number ${s}`);const n=e.getPromptWindow();(0,t.expect)(n.turns).toHaveLength(5),(0,t.expect)(n.turns[4].text).toBe("turn number 19"),(0,t.expect)(n.droppedTurns).toBe(15)}),(0,t.it)("bounds the prompt window by the token ceiling",()=>{c.set({transcript:{windowTurns:50,maxPromptTokens:60}}),e.start();for(let s=0;s<20;s+=1)o("system","a fairly wordy turn that eats budget");const n=e.getPromptWindow();(0,t.expect)(n.turns.length).toBeLessThan(20),(0,t.expect)(n.estimatedTokens).toBeLessThanOrEqual(60)}),(0,t.it)("folds older turns into a running summary exactly once per interval",async()=>{c.set({transcript:{windowTurns:5,summariseEvery:5,maxPromptTokens:1e5}});let n=0;e.onSummaryNeeded=async r=>(n+=1,`summary of ${r.length} turns`),e.start();for(let r=0;r<12;r+=1)o("system",`turn ${r}`);await new Promise(r=>setTimeout(r,30)),(0,t.expect)(n).toBeGreaterThan(0);const s=e.getPromptWindow();(0,t.expect)(s.summary).toMatch(/summary of \d+ turns/)}),(0,t.it)("recovers a session left open by an unclean shutdown",()=>{e.start("Interrupted"),o("system","we were mid conversation"),e.persist(!0),y(i);const n=e.recover();(0,t.expect)(n).not.toBeNull(),(0,t.expect)(n.title).toBe("Interrupted"),(0,t.expect)(e.finalTurns()[0].text).toBe("we were mid conversation")}),(0,t.it)("ends a session, stamps it, and clears the interview context",()=>{l.setSession({role:"Staff Engineer"}),e.start(),o("user","hello");const n=e.end();(0,t.expect)(n.endedAt).toBeGreaterThan(0),(0,t.expect)(e.isActive()).toBe(!1),(0,t.expect)(l.getSession().role).toBe(""),(0,t.expect)(e.list()).toHaveLength(1)}),(0,t.it)('writes nothing to disk when retention is "never"',()=>{c.set({sessions:{retention:"never"}}),e.start(),o("user","private"),e.persist(),(0,t.expect)(e.list()).toHaveLength(0)}),(0,t.it)("deletes sessions older than the retention window",()=>{c.set({sessions:{retention:"days",retentionDays:7}}),e.start("Old one"),e.current().startedAt=Date.now()-720*60*60*1e3,e.persist(!0),e.session=null,e.applyRetention(),(0,t.expect)(e.list()).toHaveLength(0)}),(0,t.it)("exports markdown, text and json",()=>{e.start("Export me"),o("system","What is your greatest weakness?"),o("user","Answering this question."),e.addAnswer({mode:"reply",provider:"openai",model:"gpt-4o",text:"Say something true."});const n=e.current().id,s=e.export(n,"md");(0,t.expect)(s).toContain("# Export me"),(0,t.expect)(s).toContain("**Them:** What is your greatest weakness?"),(0,t.expect)(s).toContain("gpt-4o"),(0,t.expect)(e.export(n,"txt")).toContain("Them: What is your greatest weakness?"),(0,t.expect)(JSON.parse(e.export(n,"json")).answers).toHaveLength(1)}),(0,t.it)("renames a saved session",()=>{e.start("Before"),e.end();const{id:n}=e.list()[0];e.rename(n,"After"),(0,t.expect)(e.list()[0].title).toBe("After")})});
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { createRequire } from 'node:module';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
+const require = createRequire(import.meta.url);
+
+let tmpDir;
+let SessionManager;
+let SettingsManager;
+let ContextStore;
+
+const MODULES = [
+'../src/main/SessionManager.js',
+'../src/main/SettingsManager.js',
+'../src/main/ContextStore.js',
+'../src/main/KeyStore.js'];
+
+
+function boot(dir) {
+  tmpDir = dir || fs.mkdtempSync(path.join(os.tmpdir(), 'sidecar-sess-'));
+  const electronPath = require.resolve('electron');
+  require.cache[electronPath] = {
+    id: electronPath,
+    filename: electronPath,
+    loaded: true,
+    exports: {
+      app: { getPath: () => tmpDir },
+      safeStorage: { isEncryptionAvailable: () => false }
+    }
+  };
+  for (const mod of MODULES) delete require.cache[require.resolve(mod)];
+  SettingsManager = require('../src/main/SettingsManager.js');
+  ContextStore = require('../src/main/ContextStore.js');
+  SessionManager = require('../src/main/SessionManager.js');
+  SessionManager.init(tmpDir);
+}
+
+const say = (sender, text, extra = {}) =>
+SessionManager.upsertTurn({ sender, channel: sender, text, ...extra });
+
+describe('SessionManager', () => {
+  beforeEach(() => boot());
+  afterEach(() => {
+    try {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    } catch (e) {
+
+    }
+  });
+
+  it('snapshots the interview context into the session', () => {
+    ContextStore.setSession({ role: 'Staff Engineer', company: 'Globex' });
+    const session = SessionManager.start();
+    expect(session.title).toBe('Staff Engineer at Globex');
+    expect(session.context.company).toBe('Globex');
+    expect(SessionManager.isActive()).toBe(true);
+  });
+
+  it('replaces an interim turn in place instead of appending', () => {
+    SessionManager.start();
+    const interim = say('system', 'tell me about a', { interim: true });
+    const final = say('system', 'tell me about a migration', { interim: false });
+
+    expect(final.id).toBe(interim.id);
+    expect(SessionManager.transcriptView()).toHaveLength(1);
+    expect(SessionManager.finalTurns()[0].text).toBe('tell me about a migration');
+  });
+
+  it('keeps interim turns off disk', () => {
+    SessionManager.start();
+    say('system', 'final line');
+    say('user', 'still speaking', { interim: true });
+    SessionManager.persist(true);
+
+    const onDisk = JSON.parse(
+      fs.readFileSync(path.join(tmpDir, 'sessions', `${SessionManager.current().id}.json`), 'utf8')
+    );
+    expect(onDisk.transcript).toHaveLength(1);
+    expect(onDisk.transcript[0].text).toBe('final line');
+  });
+
+  it('bounds the prompt window by turn count', () => {
+    SettingsManager.set({ transcript: { windowTurns: 5, maxPromptTokens: 100000 } });
+    SessionManager.start();
+    for (let i = 0; i < 20; i += 1) say('system', `turn number ${i}`);
+
+    const window = SessionManager.getPromptWindow();
+    expect(window.turns).toHaveLength(5);
+    expect(window.turns[4].text).toBe('turn number 19');
+    expect(window.droppedTurns).toBe(15);
+  });
+
+  it('bounds the prompt window by the token ceiling', () => {
+    SettingsManager.set({ transcript: { windowTurns: 50, maxPromptTokens: 60 } });
+    SessionManager.start();
+    for (let i = 0; i < 20; i += 1) say('system', 'a fairly wordy turn that eats budget');
+
+    const window = SessionManager.getPromptWindow();
+    expect(window.turns.length).toBeLessThan(20);
+    expect(window.estimatedTokens).toBeLessThanOrEqual(60);
+  });
+
+  it('folds older turns into a running summary exactly once per interval', async () => {
+    SettingsManager.set({
+      transcript: { windowTurns: 5, summariseEvery: 5, maxPromptTokens: 100000 }
+    });
+    let calls = 0;
+    SessionManager.onSummaryNeeded = async (older) => {
+      calls += 1;
+      return `summary of ${older.length} turns`;
+    };
+
+    SessionManager.start();
+    for (let i = 0; i < 12; i += 1) say('system', `turn ${i}`);
+    await new Promise((r) => setTimeout(r, 30));
+
+    expect(calls).toBeGreaterThan(0);
+    const window = SessionManager.getPromptWindow();
+    expect(window.summary).toMatch(/summary of \d+ turns/);
+  });
+
+  it('recovers a session left open by an unclean shutdown', () => {
+    SessionManager.start('Interrupted');
+    say('system', 'we were mid conversation');
+    SessionManager.persist(true);
+
+    const dir = tmpDir;
+    boot(dir);
+    const recovered = SessionManager.recover();
+
+    expect(recovered).not.toBeNull();
+    expect(recovered.title).toBe('Interrupted');
+    expect(SessionManager.finalTurns()[0].text).toBe('we were mid conversation');
+  });
+
+  it('ends a session, stamps it, and clears the interview context', () => {
+    ContextStore.setSession({ role: 'Staff Engineer' });
+    SessionManager.start();
+    say('user', 'hello');
+    const ended = SessionManager.end();
+
+    expect(ended.endedAt).toBeGreaterThan(0);
+    expect(SessionManager.isActive()).toBe(false);
+    expect(ContextStore.getSession().role).toBe('');
+    expect(SessionManager.list()).toHaveLength(1);
+  });
+
+  it('writes nothing to disk when retention is "never"', () => {
+    SettingsManager.set({ sessions: { retention: 'never' } });
+    SessionManager.start();
+    say('user', 'private');
+    SessionManager.persist();
+
+    expect(SessionManager.list()).toHaveLength(0);
+  });
+
+  it('deletes sessions older than the retention window', () => {
+    SettingsManager.set({ sessions: { retention: 'days', retentionDays: 7 } });
+    SessionManager.start('Old one');
+    SessionManager.current().startedAt = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    SessionManager.persist(true);
+    SessionManager.session = null;
+
+    SessionManager.applyRetention();
+    expect(SessionManager.list()).toHaveLength(0);
+  });
+
+  it('exports markdown, text and json', () => {
+    SessionManager.start('Export me');
+    say('system', 'What is your greatest weakness?');
+    say('user', 'Answering this question.');
+    SessionManager.addAnswer({
+      mode: 'reply',
+      provider: 'openai',
+      model: 'gpt-4o',
+      text: 'Say something true.'
+    });
+    const id = SessionManager.current().id;
+
+    const md = SessionManager.export(id, 'md');
+    expect(md).toContain('# Export me');
+    expect(md).toContain('**Them:** What is your greatest weakness?');
+    expect(md).toContain('gpt-4o');
+
+    expect(SessionManager.export(id, 'txt')).toContain('Them: What is your greatest weakness?');
+    expect(JSON.parse(SessionManager.export(id, 'json')).answers).toHaveLength(1);
+  });
+
+  it('renames a saved session', () => {
+    SessionManager.start('Before');
+    SessionManager.end();
+    const { id } = SessionManager.list()[0];
+    SessionManager.rename(id, 'After');
+    expect(SessionManager.list()[0].title).toBe('After');
+  });
+});

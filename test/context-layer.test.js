@@ -1,4 +1,346 @@
-var h=Object.create,f=Object.defineProperty,g=Object.getOwnPropertyDescriptor,y=Object.getOwnPropertyNames,w=Object.getPrototypeOf,b=Object.prototype.hasOwnProperty,v=(t,s,o,c)=>{if(s&&typeof s=="object"||typeof s=="function")for(let p of y(s))!b.call(t,p)&&p!==o&&f(t,p,{get:()=>s[p],enumerable:!(c=g(s,p))||c.enumerable});return t},u=(t,s,o)=>(o=t!=null?h(w(t)):{},v(s||!t||!t.__esModule?f(o,"default",{value:t,enumerable:!0}):o,t)),e=require("vitest"),k=require("node:module"),l=u(require("node:fs")),S=u(require("node:os")),E=u(require("node:path"));const B={},a=(0,k.createRequire)(B.url);let m,n,r,i;const T=["../src/main/ContextStore.js","../src/main/PromptBuilder.js","../src/main/ProfileBuilder.js","../src/main/LlmService.js","../src/main/SettingsManager.js","../src/main/KeyStore.js"];function x(){m=l.default.mkdtempSync(E.default.join(S.default.tmpdir(),"sidecar-ctx-"));const t=a.resolve("electron");a.cache[t]={id:t,filename:t,loaded:!0,exports:{app:{getPath:()=>m},safeStorage:{isEncryptionAvailable:()=>!1}}};for(const s of T)delete a.cache[a.resolve(s)];n=a("../src/main/ContextStore.js"),r=a("../src/main/PromptBuilder.js"),i=a("../src/main/ProfileBuilder.js")}const d={name:"Dana Rivers",headline:"Backend engineer",yearsExperience:7,skills:[{name:"Postgres",years:5},"Kafka"],experience:[{company:"Acme",title:"Senior Engineer",start:"2021",end:"present",bullets:["Rebuilt the ingestion pipeline"],metrics:["cut p99 latency 40%"]}],projects:[{name:"Shipyard",summary:"deploy tool",stack:["Go"],impact:"daily releases"}],education:[{school:"State University",degree:"BSc",field:"CS",end:"2018"}],stories:[{id:"s1",title:"Owning the migration nobody wanted",situation:"Legacy Postgres cluster was failing weekly",task:"Move it without downtime",action:"Built a dual-write shim and cut over per tenant",result:"Zero downtime, incidents dropped to zero",tags:["ownership","database","migration"]},{id:"s2",title:"Disagreeing with a staff engineer",situation:"Design review deadlock",task:"Reach a decision",action:"Ran a spike and brought numbers",result:"Team picked the simpler design",tags:["conflict","communication"]}]};(0,e.describe)("ContextStore",()=>{(0,e.beforeEach)(()=>x()),(0,e.afterEach)(()=>{try{l.default.rmSync(m,{recursive:!0,force:!0})}catch{}}),(0,e.it)("ingests plain text and markdown",async()=>{const t=await n.ingest("notes.md",Buffer.from(`# Resume
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { createRequire } from 'node:module';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
-Backend engineer.`));(0,e.expect)(t.kind).toBe("md"),(0,e.expect)(t.text).toContain("Backend engineer"),(0,e.expect)(n.publicView().documents).toHaveLength(1)}),(0,e.it)("extracts text from a real PDF",async()=>{const t=a.resolve("pdf-parse/package.json").replace("package.json","test/data/01-valid.pdf");if(!l.default.existsSync(t)){console.warn("[test] pdf-parse fixture missing; skipping PDF extraction check");return}const s=await n.ingest("paper.pdf",l.default.readFileSync(t));(0,e.expect)(s.kind).toBe("pdf"),(0,e.expect)(s.pages).toBeGreaterThan(0),(0,e.expect)(s.text.length).toBeGreaterThan(200)}),(0,e.it)("extracts text from a DOCX",async()=>{let t;try{t=a("jszip")}catch{console.warn("[test] jszip unavailable; skipping DOCX extraction check");return}const s=new t;s.file("[Content_Types].xml",'<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>'),s.folder("_rels").file(".rels",'<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>'),s.folder("word").file("document.xml",'<?xml version="1.0" encoding="UTF-8"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>Senior Backend Engineer at Acme</w:t></w:r></w:p></w:body></w:document>');const o=await s.generateAsync({type:"nodebuffer"}),c=await n.ingest("resume.docx",o);(0,e.expect)(c.kind).toBe("docx"),(0,e.expect)(c.text).toContain("Senior Backend Engineer at Acme")}),(0,e.it)("refuses unsupported types and oversized files",async()=>{await(0,e.expect)(n.ingest("photo.png",Buffer.from("x"))).rejects.toThrow(/Unsupported/);const t=Buffer.alloc(11*1024*1024,65);await(0,e.expect)(n.ingest("big.txt",t)).rejects.toThrow(/larger than/)}),(0,e.it)("refuses a document with no readable text",async()=>{await(0,e.expect)(n.ingest("empty.txt",Buffer.from(`   
-  `))).rejects.toThrow(/No readable text/)}),(0,e.it)("normalises a messy profile instead of throwing",()=>{const t=n.setProfile({name:"  Dana  ",yearsExperience:"7",skills:["Go",{name:"Rust",years:2},{name:""}],experience:[{company:"Acme"},{}],stories:[{title:"A story",tags:["x",""]}],junk:"ignored"});(0,e.expect)(t.name).toBe("Dana"),(0,e.expect)(t.yearsExperience).toBe(7),(0,e.expect)(t.skills.map(s=>s.name)).toEqual(["Go","Rust"]),(0,e.expect)(t.experience).toHaveLength(1),(0,e.expect)(t.stories[0].tags).toEqual(["x"]),(0,e.expect)(t).not.toHaveProperty("junk")}),(0,e.it)("keeps document text out of the renderer view",async()=>{await n.ingest("resume.txt",Buffer.from("SECRET_SALARY_FIGURE ".repeat(60)));const t=n.publicView();(0,e.expect)(t.documents[0].chars).toBeGreaterThan(1e3),(0,e.expect)(t.documents[0].preview.length).toBeLessThanOrEqual(240),(0,e.expect)(t.documents[0]).not.toHaveProperty("text")}),(0,e.it)("round-trips stories through add, edit and delete",()=>{n.setProfile(d),n.upsertStory({id:"s1",title:"Renamed",situation:"x",tags:["ownership"]}),(0,e.expect)(n.getProfile().stories.find(t=>t.id==="s1").title).toBe("Renamed"),n.deleteStory("s2"),(0,e.expect)(n.getProfile().stories.map(t=>t.id)).toEqual(["s1"])}),(0,e.it)("clears session context without touching the profile",()=>{n.setProfile(d),n.setSession({role:"Staff Engineer",company:"Acme"}),n.clearSession(),(0,e.expect)(n.getSession().role).toBe(""),(0,e.expect)(n.hasProfile()).toBe(!0)})}),(0,e.describe)("PromptBuilder",()=>{(0,e.beforeEach)(()=>{x(),n.setProfile(d)}),(0,e.afterEach)(()=>{try{l.default.rmSync(m,{recursive:!0,force:!0})}catch{}}),(0,e.it)("puts stable context in system blocks and the transcript in the user turn",()=>{n.setSession({role:"Staff Engineer",company:"Globex"});const t=r.build("assist",{transcript:[{sender:"system",text:"Tell me about a migration you owned."}],userText:""});(0,e.expect)(t.system[0].text).toContain("Sidecar"),(0,e.expect)(t.system[1].text).toContain("CANDIDATE PROFILE"),(0,e.expect)(t.system[1].text).toContain("Dana Rivers"),(0,e.expect)(t.system[2].text).toContain("Globex");const s=t.messages[0].content;(0,e.expect)(s).toContain("CONVERSATION"),(0,e.expect)(s).toContain("Tell me about a migration"),(0,e.expect)(t.system.map(o=>o.text).join()).not.toContain("Tell me about a migration")}),(0,e.it)("forbids inventing experience when a profile is loaded",()=>{const t=r.build("reply",{transcript:[],userText:""});(0,e.expect)(t.system[0].text).toMatch(/never invent/i)}),(0,e.it)("says there is no profile when none is loaded",()=>{n.clearAll();const t=r.build("reply",{transcript:[],userText:""});(0,e.expect)(t.system[0].text).toMatch(/No candidate profile is loaded/i),(0,e.expect)(t.system).toHaveLength(1)}),(0,e.it)("retrieves the story that matches the question",()=>{const t=r.build("reply",{transcript:[{sender:"system",text:"Tell me about a time you disagreed with a colleague."}]});(0,e.expect)(t.meta.storyTitles).toEqual(["Disagreeing with a staff engineer"]),(0,e.expect)(t.messages[0].content).toContain("RELEVANT STORIES")}),(0,e.it)("ranks tag matches above body matches",()=>{const t=r.retrieveStories(n.getProfile(),"database migration ownership");(0,e.expect)(t[0].id).toBe("s1")}),(0,e.it)("retrieves nothing when the question matches nothing",()=>{const t=r.build("reply",{transcript:[{sender:"system",text:"Nice weather today?"}]});(0,e.expect)(t.meta.storyCount).toBe(0),(0,e.expect)(t.messages[0].content).not.toContain("RELEVANT STORIES")}),(0,e.it)("carries session answer preferences into the instructions",()=>{n.setSession({interviewType:"behavioural",answerLength:"brief",tone:"conversational",answerLanguage:"English"});const t=r.build("reply",{transcript:[]}).system[0].text;(0,e.expect)(t).toContain("behavioural interview"),(0,e.expect)(t).toContain("2 short sentences"),(0,e.expect)(t).toContain("speak it out loud"),(0,e.expect)(t).toContain("English")}),(0,e.it)("marks a large profile block cacheable and a small session block not",()=>{n.setSession({role:"X"});const t={...d,experience:Array.from({length:20},(o,c)=>({company:`Company ${c}`,title:"Engineer",bullets:["Did a considerable amount of meaningful work on distributed systems"],metrics:[]}))};n.setProfile(t);const s=r.build("assist",{transcript:[]});(0,e.expect)(s.system[1].cacheable).toBe(!0),(0,e.expect)(s.system[2].cacheable).toBe(!1)})}),(0,e.describe)("ProfileBuilder JSON parsing",()=>{(0,e.beforeEach)(()=>x()),(0,e.afterEach)(()=>{try{l.default.rmSync(m,{recursive:!0,force:!0})}catch{}}),(0,e.it)("reads a bare JSON object",()=>{(0,e.expect)(i.parseJson('{"name":"Dana"}')).toEqual({name:"Dana"})}),(0,e.it)("reads JSON wrapped in a markdown fence",()=>{(0,e.expect)(i.parseJson('Here you go:\n```json\n{"name":"Dana"}\n```\nHope that helps.')).toEqual({name:"Dana"})}),(0,e.it)("repairs a trailing comma",()=>{(0,e.expect)(i.parseJson('{"skills":["Go",],}')).toEqual({skills:["Go"]})}),(0,e.it)("returns null rather than throwing on unusable output",()=>{(0,e.expect)(i.parseJson("I cannot help with that.")).toBeNull(),(0,e.expect)(i.parseJson("")).toBeNull(),(0,e.expect)(i.parseJson(null)).toBeNull(),(0,e.expect)(i.parseJson('{"broken": [1, 2')).toBeNull()}),(0,e.it)("refuses to distil with no documents",async()=>{await(0,e.expect)(i.distill("")).rejects.toThrow(/résumé|document/i)})});
+const require = createRequire(import.meta.url);
+
+let tmpDir;
+let ContextStore;
+let PromptBuilder;
+let ProfileBuilder;
+
+const MODULES = [
+'../src/main/ContextStore.js',
+'../src/main/PromptBuilder.js',
+'../src/main/ProfileBuilder.js',
+'../src/main/LlmService.js',
+'../src/main/SettingsManager.js',
+'../src/main/KeyStore.js'];
+
+
+function boot() {
+  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sidecar-ctx-'));
+  const electronPath = require.resolve('electron');
+  require.cache[electronPath] = {
+    id: electronPath,
+    filename: electronPath,
+    loaded: true,
+    exports: {
+      app: { getPath: () => tmpDir },
+      safeStorage: { isEncryptionAvailable: () => false }
+    }
+  };
+  for (const mod of MODULES) delete require.cache[require.resolve(mod)];
+  ContextStore = require('../src/main/ContextStore.js');
+  PromptBuilder = require('../src/main/PromptBuilder.js');
+  ProfileBuilder = require('../src/main/ProfileBuilder.js');
+}
+
+const SAMPLE_PROFILE = {
+  name: 'Dana Rivers',
+  headline: 'Backend engineer',
+  yearsExperience: 7,
+  skills: [{ name: 'Postgres', years: 5 }, 'Kafka'],
+  experience: [
+  {
+    company: 'Acme',
+    title: 'Senior Engineer',
+    start: '2021',
+    end: 'present',
+    bullets: ['Rebuilt the ingestion pipeline'],
+    metrics: ['cut p99 latency 40%']
+  }],
+
+  projects: [{ name: 'Shipyard', summary: 'deploy tool', stack: ['Go'], impact: 'daily releases' }],
+  education: [{ school: 'State University', degree: 'BSc', field: 'CS', end: '2018' }],
+  stories: [
+  {
+    id: 's1',
+    title: 'Owning the migration nobody wanted',
+    situation: 'Legacy Postgres cluster was failing weekly',
+    task: 'Move it without downtime',
+    action: 'Built a dual-write shim and cut over per tenant',
+    result: 'Zero downtime, incidents dropped to zero',
+    tags: ['ownership', 'database', 'migration']
+  },
+  {
+    id: 's2',
+    title: 'Disagreeing with a staff engineer',
+    situation: 'Design review deadlock',
+    task: 'Reach a decision',
+    action: 'Ran a spike and brought numbers',
+    result: 'Team picked the simpler design',
+    tags: ['conflict', 'communication']
+  }]
+
+};
+
+describe('ContextStore', () => {
+  beforeEach(() => boot());
+  afterEach(() => {
+    try {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    } catch (e) {
+
+    }
+  });
+
+  it('ingests plain text and markdown', async () => {
+    const doc = await ContextStore.ingest('notes.md', Buffer.from('# Resume\n\nBackend engineer.'));
+    expect(doc.kind).toBe('md');
+    expect(doc.text).toContain('Backend engineer');
+    expect(ContextStore.publicView().documents).toHaveLength(1);
+  });
+
+  it('extracts text from a real PDF', async () => {
+    const fixture = require.
+    resolve('pdf-parse/package.json').
+    replace('package.json', 'test/data/01-valid.pdf');
+    if (!fs.existsSync(fixture)) {
+      console.warn('[test] pdf-parse fixture missing; skipping PDF extraction check');
+      return;
+    }
+    const doc = await ContextStore.ingest('paper.pdf', fs.readFileSync(fixture));
+    expect(doc.kind).toBe('pdf');
+    expect(doc.pages).toBeGreaterThan(0);
+    expect(doc.text.length).toBeGreaterThan(200);
+  });
+
+  it('extracts text from a DOCX', async () => {
+    let JSZip;
+    try {
+      JSZip = require('jszip');
+    } catch (e) {
+      console.warn('[test] jszip unavailable; skipping DOCX extraction check');
+      return;
+    }
+    const zip = new JSZip();
+    zip.file(
+      '[Content_Types].xml',
+      '<?xml version="1.0" encoding="UTF-8"?>' +
+      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+      '<Default Extension="xml" ContentType="application/xml"/>' +
+      '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+      '</Types>'
+    );
+    zip.
+    folder('_rels').
+    file(
+      '.rels',
+      '<?xml version="1.0" encoding="UTF-8"?>' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>' +
+      '</Relationships>'
+    );
+    zip.
+    folder('word').
+    file(
+      'document.xml',
+      '<?xml version="1.0" encoding="UTF-8"?>' +
+      '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>' +
+      '<w:p><w:r><w:t>Senior Backend Engineer at Acme</w:t></w:r></w:p>' +
+      '</w:body></w:document>'
+    );
+
+    const buffer = await zip.generateAsync({ type: 'nodebuffer' });
+    const doc = await ContextStore.ingest('resume.docx', buffer);
+    expect(doc.kind).toBe('docx');
+    expect(doc.text).toContain('Senior Backend Engineer at Acme');
+  });
+
+  it('refuses unsupported types and oversized files', async () => {
+    await expect(ContextStore.ingest('photo.png', Buffer.from('x'))).rejects.toThrow(/Unsupported/);
+    const huge = Buffer.alloc(11 * 1024 * 1024, 0x41);
+    await expect(ContextStore.ingest('big.txt', huge)).rejects.toThrow(/larger than/);
+  });
+
+  it('refuses a document with no readable text', async () => {
+    await expect(ContextStore.ingest('empty.txt', Buffer.from('   \n  '))).rejects.toThrow(
+      /No readable text/
+    );
+  });
+
+  it('normalises a messy profile instead of throwing', () => {
+    const profile = ContextStore.setProfile({
+      name: '  Dana  ',
+      yearsExperience: '7',
+      skills: ['Go', { name: 'Rust', years: 2 }, { name: '' }],
+      experience: [{ company: 'Acme' }, {}],
+      stories: [{ title: 'A story', tags: ['x', ''] }],
+      junk: 'ignored'
+    });
+
+    expect(profile.name).toBe('Dana');
+    expect(profile.yearsExperience).toBe(7);
+    expect(profile.skills.map((s) => s.name)).toEqual(['Go', 'Rust']);
+    expect(profile.experience).toHaveLength(1);
+    expect(profile.stories[0].tags).toEqual(['x']);
+    expect(profile).not.toHaveProperty('junk');
+  });
+
+  it('keeps document text out of the renderer view', async () => {
+    await ContextStore.ingest('resume.txt', Buffer.from('SECRET_SALARY_FIGURE '.repeat(60)));
+    const view = ContextStore.publicView();
+    expect(view.documents[0].chars).toBeGreaterThan(1000);
+    expect(view.documents[0].preview.length).toBeLessThanOrEqual(240);
+    expect(view.documents[0]).not.toHaveProperty('text');
+  });
+
+  it('round-trips stories through add, edit and delete', () => {
+    ContextStore.setProfile(SAMPLE_PROFILE);
+    ContextStore.upsertStory({ id: 's1', title: 'Renamed', situation: 'x', tags: ['ownership'] });
+    expect(ContextStore.getProfile().stories.find((s) => s.id === 's1').title).toBe('Renamed');
+
+    ContextStore.deleteStory('s2');
+    expect(ContextStore.getProfile().stories.map((s) => s.id)).toEqual(['s1']);
+  });
+
+  it('clears session context without touching the profile', () => {
+    ContextStore.setProfile(SAMPLE_PROFILE);
+    ContextStore.setSession({ role: 'Staff Engineer', company: 'Acme' });
+    ContextStore.clearSession();
+
+    expect(ContextStore.getSession().role).toBe('');
+    expect(ContextStore.hasProfile()).toBe(true);
+  });
+});
+
+describe('PromptBuilder', () => {
+  beforeEach(() => {
+    boot();
+    ContextStore.setProfile(SAMPLE_PROFILE);
+  });
+  afterEach(() => {
+    try {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    } catch (e) {
+
+    }
+  });
+
+  it('puts stable context in system blocks and the transcript in the user turn', () => {
+    ContextStore.setSession({ role: 'Staff Engineer', company: 'Globex' });
+    const built = PromptBuilder.build('assist', {
+      transcript: [{ sender: 'system', text: 'Tell me about a migration you owned.' }],
+      userText: ''
+    });
+
+    expect(built.system[0].text).toContain('Sidecar');
+    expect(built.system[1].text).toContain('CANDIDATE PROFILE');
+    expect(built.system[1].text).toContain('Dana Rivers');
+    expect(built.system[2].text).toContain('Globex');
+
+    const userTurn = built.messages[0].content;
+    expect(userTurn).toContain('CONVERSATION');
+    expect(userTurn).toContain('Tell me about a migration');
+
+    expect(built.system.map((b) => b.text).join()).not.toContain('Tell me about a migration');
+  });
+
+  it('forbids inventing experience when a profile is loaded', () => {
+    const built = PromptBuilder.build('reply', { transcript: [], userText: '' });
+    expect(built.system[0].text).toMatch(/never invent/i);
+  });
+
+  it('says there is no profile when none is loaded', () => {
+    ContextStore.clearAll();
+    const built = PromptBuilder.build('reply', { transcript: [], userText: '' });
+    expect(built.system[0].text).toMatch(/No candidate profile is loaded/i);
+    expect(built.system).toHaveLength(1);
+  });
+
+  it('retrieves the story that matches the question', () => {
+    const built = PromptBuilder.build('reply', {
+      transcript: [
+      { sender: 'system', text: 'Tell me about a time you disagreed with a colleague.' }]
+
+    });
+    expect(built.meta.storyTitles).toEqual(['Disagreeing with a staff engineer']);
+    expect(built.messages[0].content).toContain('RELEVANT STORIES');
+  });
+
+  it('ranks tag matches above body matches', () => {
+    const stories = PromptBuilder.retrieveStories(
+      ContextStore.getProfile(),
+      'database migration ownership'
+    );
+    expect(stories[0].id).toBe('s1');
+  });
+
+  it('retrieves nothing when the question matches nothing', () => {
+    const built = PromptBuilder.build('reply', {
+      transcript: [{ sender: 'system', text: 'Nice weather today?' }]
+    });
+    expect(built.meta.storyCount).toBe(0);
+    expect(built.messages[0].content).not.toContain('RELEVANT STORIES');
+  });
+
+  it('carries session answer preferences into the instructions', () => {
+    ContextStore.setSession({
+      interviewType: 'behavioural',
+      answerLength: 'brief',
+      tone: 'conversational',
+      answerLanguage: 'English'
+    });
+    const text = PromptBuilder.build('reply', { transcript: [] }).system[0].text;
+    expect(text).toContain('behavioural interview');
+    expect(text).toContain('2 short sentences');
+    expect(text).toContain('speak it out loud');
+    expect(text).toContain('English');
+  });
+
+  it('marks a large profile block cacheable and a small session block not', () => {
+    ContextStore.setSession({ role: 'X' });
+    const bigProfile = {
+      ...SAMPLE_PROFILE,
+      experience: Array.from({ length: 20 }, (_, i) => ({
+        company: `Company ${i}`,
+        title: 'Engineer',
+        bullets: ['Did a considerable amount of meaningful work on distributed systems'],
+        metrics: []
+      }))
+    };
+    ContextStore.setProfile(bigProfile);
+
+    const built = PromptBuilder.build('assist', { transcript: [] });
+    expect(built.system[1].cacheable).toBe(true);
+    expect(built.system[2].cacheable).toBe(false);
+  });
+});
+
+describe('ProfileBuilder JSON parsing', () => {
+  beforeEach(() => boot());
+  afterEach(() => {
+    try {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    } catch (e) {
+
+    }
+  });
+
+  it('reads a bare JSON object', () => {
+    expect(ProfileBuilder.parseJson('{"name":"Dana"}')).toEqual({ name: 'Dana' });
+  });
+
+  it('reads JSON wrapped in a markdown fence', () => {
+    const raw = 'Here you go:\n```json\n{"name":"Dana"}\n```\nHope that helps.';
+    expect(ProfileBuilder.parseJson(raw)).toEqual({ name: 'Dana' });
+  });
+
+  it('repairs a trailing comma', () => {
+    expect(ProfileBuilder.parseJson('{"skills":["Go",],}')).toEqual({ skills: ['Go'] });
+  });
+
+  it('returns null rather than throwing on unusable output', () => {
+    expect(ProfileBuilder.parseJson('I cannot help with that.')).toBeNull();
+    expect(ProfileBuilder.parseJson('')).toBeNull();
+    expect(ProfileBuilder.parseJson(null)).toBeNull();
+    expect(ProfileBuilder.parseJson('{"broken": [1, 2')).toBeNull();
+  });
+
+  it('refuses to distil with no documents', async () => {
+    await expect(ProfileBuilder.distill('')).rejects.toThrow(/résumé|document/i);
+  });
+});

@@ -1,1 +1,159 @@
-var t=require("vitest"),n=require("node:module");const p={},c=(0,n.createRequire)(p.url),i=c.resolve("../src/main/RateLimiter.js");function u(){return delete c.cache[i],c("../src/main/RateLimiter.js")}(0,t.describe)("RateLimiter",()=>{let e;(0,t.beforeEach)(()=>{e=u(),e.backoffBaseMs=1}),(0,t.it)("runs user-priority work before queued auto work",async()=>{e.configure({p:{rpm:1,rpd:10}});const r=[];let s=0;e.now=()=>s,await e.schedule("p",{priority:"auto"},async()=>{r.push("auto1")});const o=e.schedule("p",{priority:"auto"},async()=>{r.push("auto2")}),a=e.schedule("p",{priority:"user"},async()=>{r.push("user1")});s+=61*1e3,e.configure({p:{rpm:10,rpd:10}}),e._pump("p"),await Promise.all([o,a]),(0,t.expect)(r).toEqual(["auto1","user1","auto2"])}),(0,t.it)("refuses work once the daily cap is spent",async()=>{e.configure({p:{rpm:100,rpd:2}}),await e.schedule("p",{},async()=>"a"),await e.schedule("p",{},async()=>"b"),await(0,t.expect)(e.schedule("p",{},async()=>"c")).rejects.toMatchObject({code:"RATE_LIMIT_DAILY"}),(0,t.expect)(e.snapshot().p.remainingDay).toBe(0)}),(0,t.it)("retries a 429 and honours Retry-After, charging each attempt to the budget",async()=>{e.configure({p:{rpm:100,rpd:100}});const r=[];let s=0;const o=await e.schedule("p",{onRetry:a=>r.push(a.status)},async()=>{if(s+=1,s<3){const a=new Error("rate limited");throw a.status=429,a.headers={"retry-after":"0"},a}return"ok"});(0,t.expect)(o).toBe("ok"),(0,t.expect)(s).toBe(3),(0,t.expect)(r).toEqual([429,429]),(0,t.expect)(e.snapshot().p.usedDay).toBe(3)}),(0,t.it)("gives up after 3 retries and surfaces the original error",async()=>{e.configure({p:{rpm:100,rpd:100}});let r=0;await(0,t.expect)(e.schedule("p",{},async()=>{r+=1;const s=new Error("upstream exploded");throw s.status=503,s})).rejects.toThrow("upstream exploded"),(0,t.expect)(r).toBe(4)}),(0,t.it)("does not retry once output has been emitted",async()=>{e.configure({p:{rpm:100,rpd:100}});let r=0,s=!1;await(0,t.expect)(e.schedule("p",{canRetry:()=>!s},async()=>{r+=1,s=!0;const o=new Error("died mid-stream");throw o.status=500,o})).rejects.toThrow("died mid-stream"),(0,t.expect)(r).toBe(1)}),(0,t.it)("does not retry a 4xx that is not a 429",async()=>{e.configure({p:{rpm:100,rpd:100}});let r=0;await(0,t.expect)(e.schedule("p",{},async()=>{r+=1;const s=new Error("bad key");throw s.status=401,s})).rejects.toThrow("bad key"),(0,t.expect)(r).toBe(1)}),(0,t.it)("rejects queued work whose signal is already aborted",async()=>{e.configure({p:{rpm:100,rpd:100}});const r=new AbortController;r.abort(),await(0,t.expect)(e.schedule("p",{signal:r.signal},async()=>"never")).rejects.toMatchObject({name:"AbortError"})}),(0,t.it)("resets the minute window but keeps the daily counter",async()=>{e.configure({p:{rpm:1,rpd:10}});let r=1e6;e.now=()=>r,await e.schedule("p",{},async()=>"a"),(0,t.expect)(e.snapshot().p.remainingMinute).toBe(0),r+=61*1e3;const s=e.snapshot().p;(0,t.expect)(s.remainingMinute).toBe(1),(0,t.expect)(s.usedDay).toBe(1)})});
+import { describe, it, expect, beforeEach } from 'vitest';
+import { createRequire } from 'node:module';
+
+const require = createRequire(import.meta.url);
+const modulePath = require.resolve('../src/main/RateLimiter.js');
+
+
+function freshLimiter() {
+  delete require.cache[modulePath];
+  return require('../src/main/RateLimiter.js');
+}
+
+describe('RateLimiter', () => {
+  let limiter;
+
+  beforeEach(() => {
+    limiter = freshLimiter();
+    limiter.backoffBaseMs = 1;
+  });
+
+  it('runs user-priority work before queued auto work', async () => {
+    limiter.configure({ p: { rpm: 1, rpd: 10 } });
+    const order = [];
+    let clock = 0;
+    limiter.now = () => clock;
+
+
+    const first = limiter.schedule('p', { priority: 'auto' }, async () => {
+      order.push('auto1');
+    });
+    await first;
+
+
+    const queuedAuto = limiter.schedule('p', { priority: 'auto' }, async () => {
+      order.push('auto2');
+    });
+    const queuedUser = limiter.schedule('p', { priority: 'user' }, async () => {
+      order.push('user1');
+    });
+
+    clock += 61 * 1000;
+    limiter.configure({ p: { rpm: 10, rpd: 10 } });
+    limiter._pump('p');
+    await Promise.all([queuedAuto, queuedUser]);
+
+    expect(order).toEqual(['auto1', 'user1', 'auto2']);
+  });
+
+  it('refuses work once the daily cap is spent', async () => {
+    limiter.configure({ p: { rpm: 100, rpd: 2 } });
+    await limiter.schedule('p', {}, async () => 'a');
+    await limiter.schedule('p', {}, async () => 'b');
+
+    await expect(limiter.schedule('p', {}, async () => 'c')).rejects.toMatchObject({
+      code: 'RATE_LIMIT_DAILY'
+    });
+    expect(limiter.snapshot().p.remainingDay).toBe(0);
+  });
+
+  it('retries a 429 and honours Retry-After, charging each attempt to the budget', async () => {
+    limiter.configure({ p: { rpm: 100, rpd: 100 } });
+    const retries = [];
+    let attempts = 0;
+
+    const result = await limiter.schedule(
+      'p',
+      { onRetry: (info) => retries.push(info.status) },
+      async () => {
+        attempts += 1;
+        if (attempts < 3) {
+          const err = new Error('rate limited');
+          err.status = 429;
+          err.headers = { 'retry-after': '0' };
+          throw err;
+        }
+        return 'ok';
+      }
+    );
+
+    expect(result).toBe('ok');
+    expect(attempts).toBe(3);
+    expect(retries).toEqual([429, 429]);
+    expect(limiter.snapshot().p.usedDay).toBe(3);
+  });
+
+  it('gives up after 3 retries and surfaces the original error', async () => {
+    limiter.configure({ p: { rpm: 100, rpd: 100 } });
+    let attempts = 0;
+
+    await expect(
+      limiter.schedule('p', {}, async () => {
+        attempts += 1;
+        const err = new Error('upstream exploded');
+        err.status = 503;
+        throw err;
+      })
+    ).rejects.toThrow('upstream exploded');
+
+    expect(attempts).toBe(4);
+  });
+
+  it('does not retry once output has been emitted', async () => {
+    limiter.configure({ p: { rpm: 100, rpd: 100 } });
+    let attempts = 0;
+    let emitted = false;
+
+    await expect(
+      limiter.schedule('p', { canRetry: () => !emitted }, async () => {
+        attempts += 1;
+        emitted = true;
+        const err = new Error('died mid-stream');
+        err.status = 500;
+        throw err;
+      })
+    ).rejects.toThrow('died mid-stream');
+
+    expect(attempts).toBe(1);
+  });
+
+  it('does not retry a 4xx that is not a 429', async () => {
+    limiter.configure({ p: { rpm: 100, rpd: 100 } });
+    let attempts = 0;
+
+    await expect(
+      limiter.schedule('p', {}, async () => {
+        attempts += 1;
+        const err = new Error('bad key');
+        err.status = 401;
+        throw err;
+      })
+    ).rejects.toThrow('bad key');
+
+    expect(attempts).toBe(1);
+  });
+
+  it('rejects queued work whose signal is already aborted', async () => {
+    limiter.configure({ p: { rpm: 100, rpd: 100 } });
+    const controller = new AbortController();
+    controller.abort();
+
+    await expect(
+      limiter.schedule('p', { signal: controller.signal }, async () => 'never')
+    ).rejects.toMatchObject({ name: 'AbortError' });
+  });
+
+  it('resets the minute window but keeps the daily counter', async () => {
+    limiter.configure({ p: { rpm: 1, rpd: 10 } });
+    let clock = 1_000_000;
+    limiter.now = () => clock;
+
+    await limiter.schedule('p', {}, async () => 'a');
+    expect(limiter.snapshot().p.remainingMinute).toBe(0);
+
+    clock += 61 * 1000;
+    const snap = limiter.snapshot().p;
+    expect(snap.remainingMinute).toBe(1);
+    expect(snap.usedDay).toBe(1);
+  });
+});
