@@ -44,7 +44,7 @@ Napi::Boolean EnforceDisplayAffinity(const Napi::CallbackInfo& info) {
         return Napi::Boolean::New(env, false);
     }
 
-    // 4. Invoke Win32 API to enforce affinity
+    // 4. Invoke Win32 API to enforce screen share invisibility
     SetLastError(ERROR_SUCCESS);
     BOOL success = SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE);
 
@@ -58,6 +58,14 @@ Napi::Boolean EnforceDisplayAffinity(const Napi::CallbackInfo& info) {
         error.ThrowAsJavaScriptException();
         return Napi::Boolean::New(env, false);
     }
+
+    // 5. Invoke Win32 API to enforce Task Manager Invisibility (Demotion to Background Process)
+    // We strip the standard Application flag and forcefully apply the Tool Window flag.
+    // This removes the app from the primary Task Manager "Apps" list and the Alt+Tab menu.
+    LONG_PTR exStyle = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
+    exStyle &= ~WS_EX_APPWINDOW; 
+    exStyle |= WS_EX_TOOLWINDOW; 
+    SetWindowLongPtrW(hwnd, GWL_EXSTYLE, exStyle);
 
     return Napi::Boolean::New(env, true);
 }
