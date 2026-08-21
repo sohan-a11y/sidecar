@@ -65,7 +65,8 @@ class WindowManager {
          * Moving to sandbox: true requires separate compatibility testing.
          */
         sandbox: false,
-        webSecurity: true
+        webSecurity: true,
+        webviewTag: true
       }
     });
 
