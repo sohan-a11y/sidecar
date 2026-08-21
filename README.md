@@ -20,6 +20,7 @@ No expensive subscriptions, no cloud databases, and completely private—**bring
 - 👁️ **Visual Code Solver (Vision Routing)**: Drag a capture box over live coding questions (LeetCode, HackerRank, system architecture slides). Multimodal vision models parse the context to solve the problem in real-time.
 - ⏱️ **Auto-Answer Cheat Mode**: Armed background detectors scan meeting transcripts for questions directed at you and trigger prompt answers automatically—fully debounced and rate-limited to protect your API budget.
 - 👀 **Eye-Contact Friendly UX**: Crafted to output suggestions in 3–5 bullet points (each about 7 words) so you can scan answers naturally without looking away from your camera.
+- 🕵️ **Task Manager & Alt+Tab Invisibility**: Native Win32 window style manipulation strips `WS_EX_APPWINDOW` and enforces `WS_EX_TOOLWINDOW`. This makes the overlay 100% invisible in the primary Task Manager "Apps" list and the Alt+Tab menu, running it stealthily as a background process.
 - 🔒 **Native OS Encryption**: Your provider API keys (OpenAI, Claude, Gemini, etc.) are encrypted directly using your native operating system keychain (DPAPI on Windows, Keychain on macOS).
 
 ---

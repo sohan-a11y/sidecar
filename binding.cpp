@@ -2,7 +2,7 @@
 #include <windows.h>
 #include <string>
 
-// WDA_EXCLUDEFROMCAPTURE is 0x00000011 (excludes the window from capture)
+// WDA_EXCLUDEFROMCAPTURE is 0x00000011 (excludes the window from screen capture)
 #ifndef WDA_EXCLUDEFROMCAPTURE
 #define WDA_EXCLUDEFROMCAPTURE 0x00000011
 #endif
@@ -48,6 +48,14 @@ Napi::Boolean EnforceDisplayAffinity(const Napi::CallbackInfo& info) {
     SetLastError(ERROR_SUCCESS);
     BOOL success = SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE);
 
+    // 5. Invoke Win32 API to enforce Task Manager Invisibility (Demotion to Background Process)
+    // We strip the standard Application flag and forcefully apply the Tool Window flag.
+    // This removes the app from the primary Task Manager "Apps" list and the Alt+Tab menu.
+    LONG_PTR exStyle = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
+    exStyle &= ~WS_EX_APPWINDOW; 
+    exStyle |= WS_EX_TOOLWINDOW; 
+    SetWindowLongPtrW(hwnd, GWL_EXSTYLE, exStyle);
+
     if (!success) {
         DWORD errorCode = GetLastError();
         Napi::Error error = Napi::Error::New(
@@ -58,14 +66,6 @@ Napi::Boolean EnforceDisplayAffinity(const Napi::CallbackInfo& info) {
         error.ThrowAsJavaScriptException();
         return Napi::Boolean::New(env, false);
     }
-
-    // 5. Invoke Win32 API to enforce Task Manager Invisibility (Demotion to Background Process)
-    // We strip the standard Application flag and forcefully apply the Tool Window flag.
-    // This removes the app from the primary Task Manager "Apps" list and the Alt+Tab menu.
-    LONG_PTR exStyle = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
-    exStyle &= ~WS_EX_APPWINDOW; 
-    exStyle |= WS_EX_TOOLWINDOW; 
-    SetWindowLongPtrW(hwnd, GWL_EXSTYLE, exStyle);
 
     return Napi::Boolean::New(env, true);
 }
