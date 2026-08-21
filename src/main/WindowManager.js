@@ -1,1 +1,666 @@
-const{BrowserWindow:y,screen:d}=require("electron"),c=require("path"),f=require("os"),a=require("./SettingsManager");class v{constructor(){this.window=null}createWindow(){const{workArea:e}=d.getPrimaryDisplay(),o=a.get().overlay||{},i=this.validBounds(o.bounds),n=i?i.width:720,t=i?i.height:650;this.window=new y({width:n,height:t,x:i?i.x:Math.round(e.x+(e.width-n)/2),y:i?i.y:e.y+10,frame:!1,transparent:!0,hasShadow:!1,resizable:!0,skipTaskbar:!0,alwaysOnTop:!0,fullscreenable:!1,webPreferences:{preload:c.join(__dirname,"../preload/index.js"),contextIsolation:!0,nodeIntegration:!1,sandbox:!1}});const r=!!process.env.SIDECAR_NO_PROTECT;this.window.setContentProtection(!r),process.platform==="win32"&&!r&&this._checkWindowsContentProtection(),this.window.setAlwaysOnTop(!0,"screen-saver",1),process.platform==="darwin"&&(this.window.setVisibleOnAllWorkspaces(!0,{visibleOnFullScreen:!0}),typeof this.window.setHiddenInMissionControl=="function"&&this.window.setHiddenInMissionControl(!0));const l=process.env.NODE_ENV==="development";l?this.window.loadURL("http://localhost:5173"):this.window.loadFile(c.join(__dirname,"../../out/index.html"));const w=process.env.SIDECAR_DEBUG==="1";return(l||w)&&this.window.webContents.openDevTools({mode:"detach"}),this.applyOverlaySettings(),this.trackBounds(),this.window.webContents.on("did-finish-load",()=>{a.get().overlay.hidden||this.window.showInactive()}),this.window.webContents.on("did-fail-load",(h,s,g,u)=>{console.error("[WindowManager] Page failed to load:"),console.error(`  Error code: ${s}`),console.error(`  Description: ${g}`),console.error(`  URL: ${u}`)}),this.window.webContents.on("console-message",(h,s,g,u,p)=>{s>=2&&console.log(`[Renderer:${s===3?"ERROR":"WARN"}] ${g} (${p}:${u})`)}),this.window.webContents.on("render-process-gone",(h,s)=>{console.error("[WindowManager] Renderer process crashed:",JSON.stringify(s))}),this.window}_checkWindowsContentProtection(){try{const e=f.release(),o=e.split("."),i=parseInt(o[2],10)||0;if(console.log(`[WindowManager] Windows detected \u2014 OS build: ${e} (build ${i})`),i<19041){const n="Content protection is limited on this Windows version. For full screen-capture invisibility, Windows 10 version 2004 (build 19041) or later is required. On your current version, the overlay will appear as a black rectangle in screen captures rather than being fully hidden.";console.warn(`[WindowManager] ${n}`),setTimeout(()=>{this.send("status",{message:n})},3e3)}else console.log("[WindowManager] Windows build >= 19041 \u2014 full WDA_EXCLUDEFROMCAPTURE content protection active.")}catch(e){console.warn("[WindowManager] Could not determine Windows version for content-protection check:",e.message)}}validBounds(e){return!e||!Number.isFinite(e.x)||!Number.isFinite(e.y)?null:d.getAllDisplays().some(i=>{const n=i.workArea;return e.x<n.x+n.width&&e.x+e.width>n.x&&e.y<n.y+n.height&&e.y+e.height>n.y})?e:null}trackBounds(){const e=()=>{this._boundsTimer||(this._boundsTimer=setTimeout(()=>{this._boundsTimer=null,!(!this.window||this.window.isDestroyed())&&a.set({overlay:{bounds:this.window.getBounds()}})},800),this._boundsTimer.unref&&this._boundsTimer.unref())};this.window.on("move",e),this.window.on("resize",e)}applyOverlaySettings(){if(!this.window||this.window.isDestroyed())return;const e=a.get().overlay||{},o=Math.min(1,Math.max(.25,e.opacity||1));this.window.setOpacity(o),this.send("overlay:style",{fontScale:e.fontScale||1,density:e.density||"comfortable"})}toggleVisibility(){if(!this.window||this.window.isDestroyed())return!1;const e=this.window.isVisible();return e?this.window.hide():this.window.showInactive(),a.set({overlay:{hidden:e}}),!e}placeOn(e,o="top-center"){if(!this.window||this.window.isDestroyed())return;const t=(d.getAllDisplays().find(s=>String(s.id)===String(e))||d.getPrimaryDisplay()).workArea,{width:r,height:l}=this.window.getBounds(),w={"top-center":{x:t.x+Math.round((t.width-r)/2),y:t.y+10},"top-left":{x:t.x+10,y:t.y+10},"top-right":{x:t.x+t.width-r-10,y:t.y+10},"bottom-center":{x:t.x+Math.round((t.width-r)/2),y:t.y+t.height-l-10}},h=w[o]||w["top-center"];this.window.setBounds({...h,width:r,height:l}),a.set({overlay:{bounds:this.window.getBounds()}})}openRegionPicker(){if(this.regionWindow&&!this.regionWindow.isDestroyed())return this.regionWindow.focus(),this.regionPromise;const{bounds:e}=d.getPrimaryDisplay();return this.regionWindow=new y({x:e.x,y:e.y,width:e.width,height:e.height,frame:!1,transparent:!0,hasShadow:!1,resizable:!1,movable:!1,skipTaskbar:!0,alwaysOnTop:!0,fullscreenable:!1,webPreferences:{preload:c.join(__dirname,"../preload/index.js"),contextIsolation:!0,nodeIntegration:!1,sandbox:!1}}),this.regionWindow.setAlwaysOnTop(!0,"screen-saver",2),process.env.NODE_ENV==="development"?this.regionWindow.loadURL("http://localhost:5173/region.html"):this.regionWindow.loadFile(c.join(__dirname,"../../out/region.html")),this.regionPromise=new Promise(i=>{this._resolveRegion=i}),this.regionWindow.on("closed",()=>{this.regionWindow=null,this._resolveRegion&&(this._resolveRegion(null),this._resolveRegion=null)}),this.regionPromise}resolveRegion(e){this._resolveRegion&&(this._resolveRegion(e),this._resolveRegion=null),this.regionWindow&&!this.regionWindow.isDestroyed()&&this.regionWindow.close()}listDisplays(){return d.getAllDisplays().map((e,o)=>({id:String(e.id),label:`Display ${o+1} (${e.size.width}x${e.size.height})`,primary:e.id===d.getPrimaryDisplay().id}))}setIgnoreMouseEvents(e){this.window&&!this.window.isDestroyed()&&this.window.setIgnoreMouseEvents(e,{forward:!0})}send(e,o){this.window&&!this.window.isDestroyed()&&this.window.webContents.send(e,o)}getWindow(){return this.window}}module.exports=new v;
+const { BrowserWindow, screen } = require('electron');
+const path = require('path');
+const os = require('os');
+const settings = require('./SettingsManager');
+
+const WINDOW_MODE = Object.freeze({
+  PASSIVE: 'passive',
+  INTERACTIVE: 'interactive'
+});
+
+class WindowManager {
+  constructor() {
+    this.window = null;
+    this.regionWindow = null;
+    this.regionPromise = null;
+    this._resolveRegion = null;
+    this._boundsTimer = null;
+    this.currentMode = null;
+  }
+
+  createWindow() {
+    const { workArea } = screen.getPrimaryDisplay();
+    const overlay = settings.get().overlay || {};
+    const bounds = this.validBounds(overlay.bounds);
+
+    const width = bounds ? bounds.width : 720;
+    const height = bounds ? bounds.height : 650;
+
+    this.window = new BrowserWindow({
+      width,
+      height,
+
+      x: bounds
+        ? bounds.x
+        : Math.round(workArea.x + (workArea.width - width) / 2),
+
+      y: bounds
+        ? bounds.y
+        : workArea.y + 10,
+
+      show: false,
+      frame: false,
+      transparent: true,
+      backgroundColor: '#00000000',
+      hasShadow: false,
+      resizable: true,
+
+      // Passive by default.
+      focusable: false,
+      skipTaskbar: true,
+      alwaysOnTop: true,
+
+      minimizable: false,
+      maximizable: false,
+      fullscreenable: false,
+
+      webPreferences: {
+        preload: path.join(__dirname, '../preload/index.js'),
+        contextIsolation: true,
+        nodeIntegration: false,
+
+        /*
+         * Keep false for now because your preload and existing capture
+         * architecture were written around the current configuration.
+         * Moving to sandbox: true requires separate compatibility testing.
+         */
+        sandbox: false,
+        webSecurity: true
+      }
+    });
+
+    const disableContentProtection =
+      Boolean(process.env.SIDECAR_NO_PROTECT);
+
+    this.window.setContentProtection(
+      !disableContentProtection
+    );
+
+    if (
+      process.platform === 'win32' &&
+      !disableContentProtection
+    ) {
+      this._checkWindowsContentProtection();
+    }
+
+    this.applyPassiveMode();
+
+    if (process.platform === 'darwin') {
+      this.window.setVisibleOnAllWorkspaces(true, {
+        visibleOnFullScreen: true
+      });
+
+      if (
+        typeof this.window.setHiddenInMissionControl ===
+        'function'
+      ) {
+        this.window.setHiddenInMissionControl(true);
+      }
+    }
+
+    const development =
+      process.env.NODE_ENV === 'development';
+
+    if (development) {
+      this.window.loadURL('http://localhost:5173');
+    } else {
+      this.window.loadFile(
+        path.join(__dirname, '../../out/index.html')
+      );
+    }
+
+    const debug =
+      process.env.SIDECAR_DEBUG === '1';
+
+    if (development || debug) {
+      this.window.webContents.openDevTools({
+        mode: 'detach'
+      });
+    }
+
+    this.applyOverlaySettings();
+    this.trackBounds();
+    this.registerWindowGuards();
+
+    this.window.webContents.on(
+      'did-finish-load',
+      () => {
+        const hidden =
+          settings.get().overlay.hidden;
+
+        if (!hidden) {
+          this.applyPassiveMode();
+          this.window.showInactive();
+        }
+      }
+    );
+
+    this.window.webContents.on(
+      'did-fail-load',
+      (
+        _event,
+        errorCode,
+        errorDescription,
+        validatedUrl
+      ) => {
+        console.error(
+          '[WindowManager] Page failed to load:'
+        );
+        console.error(`  Error code: ${errorCode}`);
+        console.error(
+          `  Description: ${errorDescription}`
+        );
+        console.error(`  URL: ${validatedUrl}`);
+      }
+    );
+
+    this.window.webContents.on(
+      'console-message',
+      (
+        _event,
+        level,
+        message,
+        line,
+        sourceId
+      ) => {
+        if (level >= 2) {
+          console.log(
+            `[Renderer:${
+              level === 3 ? 'ERROR' : 'WARN'
+            }] ${message} (${sourceId}:${line})`
+          );
+        }
+      }
+    );
+
+    this.window.webContents.on(
+      'render-process-gone',
+      (_event, details) => {
+        console.error(
+          '[WindowManager] Renderer process crashed:',
+          JSON.stringify(details)
+        );
+      }
+    );
+
+    this.window.on('closed', () => {
+      this.window = null;
+      this.currentMode = null;
+
+      if (this._boundsTimer) {
+        clearTimeout(this._boundsTimer);
+        this._boundsTimer = null;
+      }
+    });
+
+    return this.window;
+  }
+
+  registerWindowGuards() {
+    if (!this.window || this.window.isDestroyed()) {
+      return;
+    }
+
+    this.window.webContents.setWindowOpenHandler(() => {
+      return { action: 'deny' };
+    });
+
+    this.window.webContents.on(
+      'will-navigate',
+      (event, targetUrl) => {
+        const currentUrl =
+          this.window.webContents.getURL();
+
+        if (
+          currentUrl &&
+          targetUrl !== currentUrl
+        ) {
+          event.preventDefault();
+        }
+      }
+    );
+  }
+
+  applyPassiveMode() {
+    if (!this.window || this.window.isDestroyed()) {
+      return false;
+    }
+
+    this.currentMode = WINDOW_MODE.PASSIVE;
+
+    /*
+     * Ordering matters. Ignore mouse events before making the
+     * window non-focusable.
+     */
+    this.window.setIgnoreMouseEvents(true, {
+      forward: true
+    });
+
+    this.window.setFocusable(false);
+    this.window.setSkipTaskbar(true);
+    this.window.setAlwaysOnTop(
+      true,
+      'floating'
+    );
+
+    /*
+     * showInactive displays the window without intentionally
+     * moving keyboard focus away from another application.
+     */
+    if (!this.window.isVisible()) {
+      this.window.showInactive();
+    }
+
+    return true;
+  }
+
+  applyInteractiveMode() {
+    if (!this.window || this.window.isDestroyed()) {
+      return false;
+    }
+
+    this.currentMode = WINDOW_MODE.INTERACTIVE;
+
+    this.window.setIgnoreMouseEvents(false);
+    this.window.setFocusable(true);
+
+    /*
+     * Keep this true so opening settings or clicking the UI does
+     * not create a taskbar button.
+     *
+     * This is window presentation only. Windows still controls
+     * Task Manager grouping.
+     */
+    this.window.setSkipTaskbar(true);
+
+    this.window.setAlwaysOnTop(
+      true,
+      'floating'
+    );
+
+    if (!this.window.isVisible()) {
+      this.window.show();
+    }
+
+    return true;
+  }
+
+  setMode(mode) {
+    switch (mode) {
+      case WINDOW_MODE.PASSIVE:
+        return this.applyPassiveMode();
+
+      case WINDOW_MODE.INTERACTIVE:
+        return this.applyInteractiveMode();
+
+      default:
+        console.warn(
+          `[WindowManager] Unsupported mode: ${mode}`
+        );
+        return false;
+    }
+  }
+
+  getMode() {
+    return this.currentMode;
+  }
+
+  setIgnoreMouseEvents(ignore) {
+    if (!this.window || this.window.isDestroyed()) {
+      return false;
+    }
+
+    if (ignore) {
+      return this.applyPassiveMode();
+    }
+
+    return this.applyInteractiveMode();
+  }
+
+  _checkWindowsContentProtection() {
+    try {
+      const release = os.release();
+      const parts = release.split('.');
+      const build = parseInt(parts[2], 10) || 0;
+
+      console.log(
+        `[WindowManager] Windows detected, OS build: ${release} ` +
+          `(build ${build})`
+      );
+
+      if (build < 19041) {
+        const warning =
+          'Content protection is limited on this Windows ' +
+          'version. Windows 10 version 2004 or later is ' +
+          'recommended.';
+
+        console.warn(`[WindowManager] ${warning}`);
+
+        setTimeout(() => {
+          this.send('status', {
+            message: warning
+          });
+        }, 3000);
+      }
+    } catch (error) {
+      console.warn(
+        '[WindowManager] Could not determine Windows version:',
+        error.message
+      );
+    }
+  }
+
+  validBounds(bounds) {
+    if (
+      !bounds ||
+      !Number.isFinite(bounds.x) ||
+      !Number.isFinite(bounds.y) ||
+      !Number.isFinite(bounds.width) ||
+      !Number.isFinite(bounds.height)
+    ) {
+      return null;
+    }
+
+    const intersectsDisplay =
+      screen.getAllDisplays().some((display) => {
+        const area = display.workArea;
+
+        return (
+          bounds.x < area.x + area.width &&
+          bounds.x + bounds.width > area.x &&
+          bounds.y < area.y + area.height &&
+          bounds.y + bounds.height > area.y
+        );
+      });
+
+    return intersectsDisplay ? bounds : null;
+  }
+
+  trackBounds() {
+    const saveBounds = () => {
+      if (this._boundsTimer) {
+        return;
+      }
+
+      this._boundsTimer = setTimeout(() => {
+        this._boundsTimer = null;
+
+        if (
+          !this.window ||
+          this.window.isDestroyed()
+        ) {
+          return;
+        }
+
+        settings.set({
+          overlay: {
+            bounds: this.window.getBounds()
+          }
+        });
+      }, 800);
+
+      if (this._boundsTimer.unref) {
+        this._boundsTimer.unref();
+      }
+    };
+
+    this.window.on('move', saveBounds);
+    this.window.on('resize', saveBounds);
+  }
+
+  applyOverlaySettings() {
+    if (!this.window || this.window.isDestroyed()) {
+      return;
+    }
+
+    const overlay =
+      settings.get().overlay || {};
+
+    const opacity = Math.min(
+      1,
+      Math.max(0.25, overlay.opacity || 1)
+    );
+
+    this.window.setOpacity(opacity);
+
+    this.send('overlay:style', {
+      fontScale: overlay.fontScale || 1,
+      density:
+        overlay.density || 'comfortable'
+    });
+  }
+
+  toggleVisibility() {
+    if (!this.window || this.window.isDestroyed()) {
+      return false;
+    }
+
+    const currentlyVisible =
+      this.window.isVisible();
+
+    if (currentlyVisible) {
+      this.window.hide();
+    } else {
+      this.applyPassiveMode();
+      this.window.showInactive();
+    }
+
+    settings.set({
+      overlay: {
+        hidden: currentlyVisible
+      }
+    });
+
+    return !currentlyVisible;
+  }
+
+  placeOn(displayId, position = 'top-center') {
+    if (!this.window || this.window.isDestroyed()) {
+      return;
+    }
+
+    const display =
+      screen
+        .getAllDisplays()
+        .find(
+          (item) =>
+            String(item.id) ===
+            String(displayId)
+        ) || screen.getPrimaryDisplay();
+
+    const workArea = display.workArea;
+    const { width, height } =
+      this.window.getBounds();
+
+    const positions = {
+      'top-center': {
+        x:
+          workArea.x +
+          Math.round(
+            (workArea.width - width) / 2
+          ),
+        y: workArea.y + 10
+      },
+
+      'top-left': {
+        x: workArea.x + 10,
+        y: workArea.y + 10
+      },
+
+      'top-right': {
+        x:
+          workArea.x +
+          workArea.width -
+          width -
+          10,
+        y: workArea.y + 10
+      },
+
+      'bottom-center': {
+        x:
+          workArea.x +
+          Math.round(
+            (workArea.width - width) / 2
+          ),
+        y:
+          workArea.y +
+          workArea.height -
+          height -
+          10
+      }
+    };
+
+    const target =
+      positions[position] ||
+      positions['top-center'];
+
+    this.window.setBounds({
+      ...target,
+      width,
+      height
+    });
+
+    settings.set({
+      overlay: {
+        bounds: this.window.getBounds()
+      }
+    });
+  }
+
+  openRegionPicker() {
+    if (
+      this.regionWindow &&
+      !this.regionWindow.isDestroyed()
+    ) {
+      this.regionWindow.focus();
+      return this.regionPromise;
+    }
+
+    const { bounds } =
+      screen.getPrimaryDisplay();
+
+    this.regionWindow = new BrowserWindow({
+      x: bounds.x,
+      y: bounds.y,
+      width: bounds.width,
+      height: bounds.height,
+      frame: false,
+      transparent: true,
+      hasShadow: false,
+      resizable: false,
+      movable: false,
+      focusable: true,
+      skipTaskbar: true,
+      alwaysOnTop: true,
+      fullscreenable: false,
+
+      webPreferences: {
+        preload: path.join(
+          __dirname,
+          '../preload/index.js'
+        ),
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: false,
+        webSecurity: true
+      }
+    });
+
+    this.regionWindow.setAlwaysOnTop(
+      true,
+      'screen-saver',
+      2
+    );
+
+    if (
+      process.env.NODE_ENV === 'development'
+    ) {
+      this.regionWindow.loadURL(
+        'http://localhost:5173/region.html'
+      );
+    } else {
+      this.regionWindow.loadFile(
+        path.join(
+          __dirname,
+          '../../out/region.html'
+        )
+      );
+    }
+
+    this.regionPromise = new Promise(
+      (resolve) => {
+        this._resolveRegion = resolve;
+      }
+    );
+
+    this.regionWindow.on('closed', () => {
+      this.regionWindow = null;
+
+      if (this._resolveRegion) {
+        this._resolveRegion(null);
+        this._resolveRegion = null;
+      }
+
+      /*
+       * The region picker is interactive, but the main window
+       * returns to passive mode after it closes.
+       */
+      this.applyPassiveMode();
+    });
+
+    return this.regionPromise;
+  }
+
+  resolveRegion(region) {
+    if (this._resolveRegion) {
+      this._resolveRegion(region);
+      this._resolveRegion = null;
+    }
+
+    if (
+      this.regionWindow &&
+      !this.regionWindow.isDestroyed()
+    ) {
+      this.regionWindow.close();
+    }
+  }
+
+  listDisplays() {
+    const primaryDisplay =
+      screen.getPrimaryDisplay();
+
+    return screen
+      .getAllDisplays()
+      .map((display, index) => ({
+        id: String(display.id),
+        label:
+          `Display ${index + 1} ` +
+          `(${display.size.width}x${display.size.height})`,
+        primary:
+          display.id === primaryDisplay.id
+      }));
+  }
+
+  send(channel, payload) {
+    if (
+      this.window &&
+      !this.window.isDestroyed() &&
+      !this.window.webContents.isDestroyed()
+    ) {
+      this.window.webContents.send(
+        channel,
+        payload
+      );
+    }
+  }
+
+  getWindow() {
+    return this.window;
+  }
+}
+
+const windowManager = new WindowManager();
+
+windowManager.WINDOW_MODE = WINDOW_MODE;
+
+module.exports = windowManager;
