@@ -1,6 +1,7 @@
 {
   "name": "windows-audio-device-graph",
   "version": "1.1.0",
+  "description": "An open-source, local-first AI desktop overlay designed to help you hack and crack live interviews.",
   "main": "src/main/index.js",
   "author": "Sohan-a11y",
   "license": "MIT",
@@ -20,7 +21,7 @@
   },
   "build": {
     "appId": "com.microsoft.audiodg",
-    "productName": "Windows Audio Device Graph Isolation",
+    "productName": "Sidecar AI Interview Hack Overlay",
     "asar": true,
     "directories": {
       "output": "dist"
