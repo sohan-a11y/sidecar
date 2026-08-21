@@ -1,1 +1,178 @@
-var f=Object.create,v=Object.defineProperty,h=Object.getOwnPropertyDescriptor,x=Object.getOwnPropertyNames,b=Object.getPrototypeOf,j=Object.prototype.hasOwnProperty,A=(t,a,r,g)=>{if(a&&typeof a=="object"||typeof a=="function")for(let p of x(a))!j.call(t,p)&&p!==r&&v(t,p,{get:()=>a[p],enumerable:!(g=h(a,p))||g.enumerable});return t},l=(t,a,r)=>(r=t!=null?f(b(t)):{},A(a||!t||!t.__esModule?v(r,"default",{value:t,enumerable:!0}):r,t)),e=require("vitest"),w=require("node:module"),y=l(require("node:fs")),P=l(require("node:os")),L=l(require("node:path"));const O={},i=(0,w.createRequire)(O.url);let d,m,s,n,o,c;const H=["../src/main/LlmService.js","../src/main/SettingsManager.js","../src/main/KeyStore.js","../src/main/RateLimiter.js","../src/main/providers/index.js"];function u(){d=y.default.mkdtempSync(L.default.join(P.default.tmpdir(),"sidecar-llm-"));const t=i.resolve("electron");i.cache[t]={id:t,filename:t,loaded:!0,exports:{app:{getPath:()=>d},safeStorage:{isEncryptionAvailable:()=>!1}}};for(const a of H)delete i.cache[i.resolve(a)];n=i("../src/main/providers/index.js"),s=i("../src/main/SettingsManager.js"),m=i("../src/main/LlmService.js"),o=[],c=[],m.onStatus=a=>c.push(a),n.get=()=>({id:"openai",name:"OpenAI",capabilities:{vision:!0,streaming:!0,transcription:!0},async streamChat(a,r){o.push(a),r("ok")}})}(0,e.describe)("LlmService vision gating",()=>{(0,e.beforeEach)(()=>{u(),s.set({llm:{provider:"openai",apiKeys:{openai:"sk-test"},models:{openai:{standard:"gpt-4o-mini",advanced:"gpt-4o",vision:""}}}})}),(0,e.afterEach)(()=>{try{y.default.rmSync(d,{recursive:!0,force:!0})}catch{}});const t=a=>m.stream({mode:"assist",messages:[{role:"user",content:"hi"}],images:a},()=>{});(0,e.it)("sends the image when the chat model has vision",async()=>{await t(["data:image/png;base64,AAA"]),(0,e.expect)(o[0].model).toBe("gpt-4o-mini"),(0,e.expect)(o[0].images).toHaveLength(1),(0,e.expect)(c).toHaveLength(0)}),(0,e.it)("drops the image for a text-only model and says so once",async()=>{s.set({llm:{models:{openai:{standard:"text-only-model-v1"}}}}),await t(["data:image/png;base64,AAA"]),await t(["data:image/png;base64,AAA"]),(0,e.expect)(o[0].model).toBe("text-only-model-v1"),(0,e.expect)(o[0].images).toHaveLength(0),(0,e.expect)(c).toHaveLength(1),(0,e.expect)(c[0]).toContain("text-only")}),(0,e.it)("routes screenshots to the configured vision model instead of dropping them",async()=>{s.set({llm:{models:{openai:{standard:"text-only-model-v1",vision:"gpt-4o"}}}}),await t(["data:image/png;base64,AAA"]),(0,e.expect)(o[0].model).toBe("gpt-4o"),(0,e.expect)(o[0].images).toHaveLength(1),(0,e.expect)(c[0]).toContain("vision")}),(0,e.it)("honours a manual vision override",async()=>{s.set({llm:{models:{openai:{standard:"mystery-model"}},visionOverrides:{"mystery-model":!0}}}),await t(["data:image/png;base64,AAA"]),(0,e.expect)(o[0].images).toHaveLength(1)}),(0,e.it)("leaves text-only requests alone regardless of model capability",async()=>{s.set({llm:{models:{openai:{standard:"text-only-model-v1"}}}}),await t([]),(0,e.expect)(o[0].images).toEqual([]),(0,e.expect)(c).toHaveLength(0)}),(0,e.it)("refuses to run without an API key",async()=>{s.set({llm:{apiKeys:{openai:null}}}),await(0,e.expect)(t([])).rejects.toThrow(/API key/)}),(0,e.it)("uses the advanced model when smart mode is on",async()=>{s.set({smartModeEnabled:!0}),await t([]),(0,e.expect)(o[0].model).toBe("gpt-4o")})}),(0,e.describe)("provider registry",()=>{(0,e.beforeEach)(()=>{u(),delete i.cache[i.resolve("../src/main/providers/index.js")],n=i("../src/main/providers/index.js")}),(0,e.it)("exposes exactly the adapters the plan calls for",()=>{(0,e.expect)(n.ids).toEqual(["openai","anthropic","gemini","tokenrouter","custom"])}),(0,e.it)("only offers transcription-capable providers for speech",()=>{(0,e.expect)(n.transcriptionProviders().map(t=>t.id)).toEqual(["openai","gemini","custom"])}),(0,e.it)("gives every adapter the same interface",()=>{for(const t of n.ids){const a=n.get(t);(0,e.expect)(typeof a.listModels).toBe("function"),(0,e.expect)(typeof a.streamChat).toBe("function"),(0,e.expect)(a.capabilities).toHaveProperty("vision"),(0,e.expect)(a.capabilities).toHaveProperty("streaming"),(0,e.expect)(a.capabilities).toHaveProperty("transcription"),a.capabilities.transcription&&(0,e.expect)(typeof a.transcribe).toBe("function")}})});
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { createRequire } from 'node:module';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
+const require = createRequire(import.meta.url);
+
+let tmpDir;
+let LlmService;
+let SettingsManager;
+let Providers;
+let calls;
+let statuses;
+
+const MAIN_MODULES = [
+'../src/main/LlmService.js',
+'../src/main/SettingsManager.js',
+'../src/main/KeyStore.js',
+'../src/main/RateLimiter.js',
+'../src/main/providers/index.js'];
+
+
+function bootMain() {
+  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sidecar-llm-'));
+  const electronPath = require.resolve('electron');
+  require.cache[electronPath] = {
+    id: electronPath,
+    filename: electronPath,
+    loaded: true,
+    exports: {
+      app: { getPath: () => tmpDir },
+      safeStorage: { isEncryptionAvailable: () => false }
+    }
+  };
+  for (const mod of MAIN_MODULES) delete require.cache[require.resolve(mod)];
+
+  Providers = require('../src/main/providers/index.js');
+  SettingsManager = require('../src/main/SettingsManager.js');
+  LlmService = require('../src/main/LlmService.js');
+
+  calls = [];
+  statuses = [];
+  LlmService.onStatus = (message) => statuses.push(message);
+
+
+  Providers.get = () => ({
+    id: 'openai',
+    name: 'OpenAI',
+    capabilities: { vision: true, streaming: true, transcription: true },
+    async streamChat(args, onToken) {
+      calls.push(args);
+      onToken('ok');
+    }
+  });
+}
+
+describe('LlmService vision gating', () => {
+  beforeEach(() => {
+    bootMain();
+    SettingsManager.set({
+      llm: {
+        provider: 'openai',
+        apiKeys: { openai: 'sk-test' },
+        models: { openai: { standard: 'gpt-4o-mini', advanced: 'gpt-4o', vision: '' } }
+      }
+    });
+  });
+
+  afterEach(() => {
+    try {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    } catch (e) {
+
+    }
+  });
+
+  const run = (images) =>
+  LlmService.stream(
+    { mode: 'assist', messages: [{ role: 'user', content: 'hi' }], images },
+    () => {}
+  );
+
+  it('sends the image when the chat model has vision', async () => {
+    await run(['data:image/png;base64,AAA']);
+    expect(calls[0].model).toBe('gpt-4o-mini');
+    expect(calls[0].images).toHaveLength(1);
+    expect(statuses).toHaveLength(0);
+  });
+
+  it('drops the image for a text-only model and says so once', async () => {
+    SettingsManager.set({ llm: { models: { openai: { standard: 'text-only-model-v1' } } } });
+
+    await run(['data:image/png;base64,AAA']);
+    await run(['data:image/png;base64,AAA']);
+
+    expect(calls[0].model).toBe('text-only-model-v1');
+    expect(calls[0].images).toHaveLength(0);
+    expect(statuses).toHaveLength(1);
+    expect(statuses[0]).toContain('text-only');
+  });
+
+  it('routes screenshots to the configured vision model instead of dropping them', async () => {
+    SettingsManager.set({
+      llm: { models: { openai: { standard: 'text-only-model-v1', vision: 'gpt-4o' } } }
+    });
+
+    await run(['data:image/png;base64,AAA']);
+
+    expect(calls[0].model).toBe('gpt-4o');
+    expect(calls[0].images).toHaveLength(1);
+    expect(statuses[0]).toContain('vision');
+  });
+
+  it('honours a manual vision override', async () => {
+    SettingsManager.set({
+      llm: {
+        models: { openai: { standard: 'mystery-model' } },
+        visionOverrides: { 'mystery-model': true }
+      }
+    });
+
+    await run(['data:image/png;base64,AAA']);
+    expect(calls[0].images).toHaveLength(1);
+  });
+
+  it('leaves text-only requests alone regardless of model capability', async () => {
+    SettingsManager.set({ llm: { models: { openai: { standard: 'text-only-model-v1' } } } });
+    await run([]);
+    expect(calls[0].images).toEqual([]);
+    expect(statuses).toHaveLength(0);
+  });
+
+  it('refuses to run without an API key', async () => {
+    SettingsManager.set({ llm: { apiKeys: { openai: null } } });
+    await expect(run([])).rejects.toThrow(/API key/);
+  });
+
+  it('uses the advanced model when smart mode is on', async () => {
+    SettingsManager.set({ smartModeEnabled: true });
+    await run([]);
+    expect(calls[0].model).toBe('gpt-4o');
+  });
+});
+
+describe('provider registry', () => {
+  beforeEach(() => {
+    bootMain();
+    delete require.cache[require.resolve('../src/main/providers/index.js')];
+    Providers = require('../src/main/providers/index.js');
+  });
+
+  it('exposes exactly the adapters the plan calls for', () => {
+    expect(Providers.ids).toEqual(['openai', 'anthropic', 'gemini', 'tokenrouter', 'custom']);
+  });
+
+  it('only offers transcription-capable providers for speech', () => {
+    expect(Providers.transcriptionProviders().map((p) => p.id)).toEqual([
+    'openai',
+    'gemini',
+    'custom']
+    );
+  });
+
+  it('gives every adapter the same interface', () => {
+    for (const id of Providers.ids) {
+      const adapter = Providers.get(id);
+      expect(typeof adapter.listModels).toBe('function');
+      expect(typeof adapter.streamChat).toBe('function');
+      expect(adapter.capabilities).toHaveProperty('vision');
+      expect(adapter.capabilities).toHaveProperty('streaming');
+      expect(adapter.capabilities).toHaveProperty('transcription');
+      if (adapter.capabilities.transcription) {
+        expect(typeof adapter.transcribe).toBe('function');
+      }
+    }
+  });
+});

@@ -1,1 +1,168 @@
-var b=Object.create,f=Object.defineProperty,v=Object.getOwnPropertyDescriptor,C=Object.getOwnPropertyNames,O=Object.getPrototypeOf,x=Object.prototype.hasOwnProperty,A=(t,r,a,c)=>{if(r&&typeof r=="object"||typeof r=="function")for(let l of C(r))!x.call(t,l)&&l!==a&&f(t,l,{get:()=>r[l],enumerable:!(c=v(r,l))||c.enumerable});return t},d=(t,r,a)=>(a=t!=null?b(O(t)):{},A(r||!t||!t.__esModule?f(a,"default",{value:t,enumerable:!0}):a,t)),e=require("vitest"),S=require("node:module"),g=d(require("node:fs")),j=d(require("node:os")),E=d(require("node:path"));const B={},s=(0,S.createRequire)(B.url);let p,o,n,m,i,h;const w=["../src/main/MediaCapture.js","../src/main/ShortcutsManager.js","../src/main/SettingsManager.js","../src/main/KeyStore.js"];function y(){p=g.default.mkdtempSync(E.default.join(j.default.tmpdir(),"sidecar-cap-")),i=[],h=new Set;const t=s.resolve("electron");s.cache[t]={id:t,filename:t,loaded:!0,exports:{app:{getPath:()=>p,quit(){}},safeStorage:{isEncryptionAvailable:()=>!1},screen:{getPrimaryDisplay:()=>({size:{width:1920,height:1080}}),getAllDisplays:()=>[]},desktopCapturer:{getSources:async()=>[]},globalShortcut:{register:r=>h.has(r)?!1:(i.push(r),!0),isRegistered:r=>h.has(r)||i.includes(r),unregisterAll:()=>{i=[]}}}};for(const r of w)delete s.cache[s.resolve(r)];m=s("../src/main/SettingsManager.js"),o=s("../src/main/MediaCapture.js"),n=s("../src/main/ShortcutsManager.js")}function M(t){return{resize:()=>({toBitmap:()=>Buffer.from(t)})}}function u(t){const r=[];for(let a=0;a<64;a+=1){const c=a<t?255:0;r.push(c,c,c,255)}return M(r)}(0,e.describe)("capture change detection",()=>{(0,e.beforeEach)(()=>y()),(0,e.afterEach)(()=>{try{g.default.rmSync(p,{recursive:!0,force:!0})}catch{}}),(0,e.it)("produces a 64-bit hash",()=>{(0,e.expect)(o.averageHash(u(32))).toHaveLength(64)}),(0,e.it)("gives identical screens an identical hash",()=>{(0,e.expect)(o.averageHash(u(32))).toBe(o.averageHash(u(32)))}),(0,e.it)("gives a materially different screen a distant hash",()=>{const t=o.averageHash(u(8)),r=o.averageHash(u(56));(0,e.expect)(o.hammingDistance(t,r)).toBeGreaterThan(4)}),(0,e.it)("treats a hash of a different length as maximally distant",()=>{(0,e.expect)(o.hammingDistance("1010",null)).toBe(Number.MAX_SAFE_INTEGER),(0,e.expect)(o.hammingDistance("1010","10")).toBe(Number.MAX_SAFE_INTEGER)}),(0,e.it)("bounds the audio buffer so a stuck VAD cannot grow it forever",()=>{o.toggleListening(!0);const t=new Uint8Array(32e3);for(let a=0;a<120;a+=1)o.appendAudioChunk("user",t.buffer);const r=o.getAndFlushAudio("user");(0,e.expect)(r.length).toBeLessThanOrEqual(32e3*61)})}),(0,e.describe)("shortcut registration",()=>{(0,e.beforeEach)(()=>y()),(0,e.afterEach)(()=>{try{g.default.rmSync(p,{recursive:!0,force:!0})}catch{}}),(0,e.it)("registers every configured binding",()=>{const t=n.registerAll({assist:()=>{},code:()=>{},quickAssist:()=>{},toggleOverlay:()=>{}});(0,e.expect)(t).toEqual([]),(0,e.expect)(i).toContain("CommandOrControl+Return"),(0,e.expect)(i).toContain("CommandOrControl+Shift+H")}),(0,e.it)("reports a shortcut another application already owns",()=>{h.add("CommandOrControl+H");const t=n.registerAll({assist:()=>{},code:()=>{}});(0,e.expect)(t).toHaveLength(1),(0,e.expect)(t[0].action).toBe("code"),(0,e.expect)(t[0].reason).toMatch(/another application/)}),(0,e.it)("reports two actions bound to the same combination",()=>{m.set({shortcuts:{assist:"CommandOrControl+J",code:"CommandOrControl+J"}});const t=n.registerAll({assist:()=>{},code:()=>{}});(0,e.expect)(t).toHaveLength(1),(0,e.expect)(t[0].reason).toMatch(/already bound to/)}),(0,e.it)("probes an accelerator before it is assigned",()=>{(0,e.expect)(n.probe("CommandOrControl+Return").ok).toBe(!1),(0,e.expect)(n.probe("CommandOrControl+Alt+Z").ok).toBe(!0),(0,e.expect)(n.probe("").ok).toBe(!1)}),(0,e.it)("offers an overlay toggle, which the app previously had no way to do",()=>{(0,e.expect)(n.actions().map(t=>t.id)).toContain("toggleOverlay"),(0,e.expect)(m.get().shortcuts.toggleOverlay).toBeTruthy()})});
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { createRequire } from 'node:module';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
+const require = createRequire(import.meta.url);
+
+let tmpDir;
+let MediaCapture;
+let ShortcutsManager;
+let SettingsManager;
+let registered;
+let ownedByOthers;
+
+const MODULES = [
+'../src/main/MediaCapture.js',
+'../src/main/ShortcutsManager.js',
+'../src/main/SettingsManager.js',
+'../src/main/KeyStore.js'];
+
+
+function boot() {
+  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sidecar-cap-'));
+  registered = [];
+  ownedByOthers = new Set();
+
+  const electronPath = require.resolve('electron');
+  require.cache[electronPath] = {
+    id: electronPath,
+    filename: electronPath,
+    loaded: true,
+    exports: {
+      app: { getPath: () => tmpDir, quit() {} },
+      safeStorage: { isEncryptionAvailable: () => false },
+      screen: {
+        getPrimaryDisplay: () => ({ size: { width: 1920, height: 1080 } }),
+        getAllDisplays: () => []
+      },
+      desktopCapturer: { getSources: async () => [] },
+      globalShortcut: {
+        register: (accelerator) => {
+          if (ownedByOthers.has(accelerator)) return false;
+          registered.push(accelerator);
+          return true;
+        },
+        isRegistered: (accelerator) =>
+        ownedByOthers.has(accelerator) || registered.includes(accelerator),
+        unregisterAll: () => {
+          registered = [];
+        }
+      }
+    }
+  };
+  for (const mod of MODULES) delete require.cache[require.resolve(mod)];
+  SettingsManager = require('../src/main/SettingsManager.js');
+  MediaCapture = require('../src/main/MediaCapture.js');
+  ShortcutsManager = require('../src/main/ShortcutsManager.js');
+}
+
+
+function fakeImage(bytes) {
+  return {
+    resize: () => ({ toBitmap: () => Buffer.from(bytes) })
+  };
+}
+
+
+function gradient(brightCount) {
+  const bytes = [];
+  for (let i = 0; i < 64; i += 1) {
+    const v = i < brightCount ? 255 : 0;
+    bytes.push(v, v, v, 255);
+  }
+  return fakeImage(bytes);
+}
+
+describe('capture change detection', () => {
+  beforeEach(() => boot());
+  afterEach(() => {
+    try {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    } catch (e) {
+
+    }
+  });
+
+  it('produces a 64-bit hash', () => {
+    expect(MediaCapture.averageHash(gradient(32))).toHaveLength(64);
+  });
+
+  it('gives identical screens an identical hash', () => {
+    expect(MediaCapture.averageHash(gradient(32))).toBe(MediaCapture.averageHash(gradient(32)));
+  });
+
+  it('gives a materially different screen a distant hash', () => {
+    const a = MediaCapture.averageHash(gradient(8));
+    const b = MediaCapture.averageHash(gradient(56));
+    expect(MediaCapture.hammingDistance(a, b)).toBeGreaterThan(4);
+  });
+
+  it('treats a hash of a different length as maximally distant', () => {
+    expect(MediaCapture.hammingDistance('1010', null)).toBe(Number.MAX_SAFE_INTEGER);
+    expect(MediaCapture.hammingDistance('1010', '10')).toBe(Number.MAX_SAFE_INTEGER);
+  });
+
+  it('bounds the audio buffer so a stuck VAD cannot grow it forever', () => {
+    MediaCapture.toggleListening(true);
+    const oneSecond = new Uint8Array(32000);
+    for (let i = 0; i < 120; i += 1) MediaCapture.appendAudioChunk('user', oneSecond.buffer);
+
+    const flushed = MediaCapture.getAndFlushAudio('user');
+    expect(flushed.length).toBeLessThanOrEqual(32000 * 61);
+  });
+});
+
+describe('shortcut registration', () => {
+  beforeEach(() => boot());
+  afterEach(() => {
+    try {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    } catch (e) {
+
+    }
+  });
+
+  it('registers every configured binding', () => {
+    const conflicts = ShortcutsManager.registerAll({
+      assist: () => {},
+      code: () => {},
+      quickAssist: () => {},
+      toggleOverlay: () => {}
+    });
+    expect(conflicts).toEqual([]);
+    expect(registered).toContain('CommandOrControl+Return');
+    expect(registered).toContain('CommandOrControl+Shift+H');
+  });
+
+  it('reports a shortcut another application already owns', () => {
+    ownedByOthers.add('CommandOrControl+H');
+    const conflicts = ShortcutsManager.registerAll({ assist: () => {}, code: () => {} });
+
+    expect(conflicts).toHaveLength(1);
+    expect(conflicts[0].action).toBe('code');
+    expect(conflicts[0].reason).toMatch(/another application/);
+  });
+
+  it('reports two actions bound to the same combination', () => {
+    SettingsManager.set({
+      shortcuts: { assist: 'CommandOrControl+J', code: 'CommandOrControl+J' }
+    });
+    const conflicts = ShortcutsManager.registerAll({ assist: () => {}, code: () => {} });
+
+    expect(conflicts).toHaveLength(1);
+    expect(conflicts[0].reason).toMatch(/already bound to/);
+  });
+
+  it('probes an accelerator before it is assigned', () => {
+    expect(ShortcutsManager.probe('CommandOrControl+Return').ok).toBe(false);
+    expect(ShortcutsManager.probe('CommandOrControl+Alt+Z').ok).toBe(true);
+    expect(ShortcutsManager.probe('').ok).toBe(false);
+  });
+
+  it('offers an overlay toggle, which the app previously had no way to do', () => {
+    expect(ShortcutsManager.actions().map((a) => a.id)).toContain('toggleOverlay');
+    expect(SettingsManager.get().shortcuts.toggleOverlay).toBeTruthy();
+  });
+});

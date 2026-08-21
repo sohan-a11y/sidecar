@@ -1,1 +1,103 @@
-var t=require("vitest"),c=require("../src/renderer/lib/vadSegmenter.js");const i=1024,u=16e3,h=i/u*1e3;function m(e){const s=new Float32Array(i);for(let r=0;r<i;r+=1)s[r]=r%2===0?e:-e;return s}function o(e,s,r){const p=[];for(let g=0;g<r;g+=1){const l=e.push(m(s),h);l&&p.push(l)}return p}const n=.001,a=.2;(0,t.describe)("VAD segmenter",()=>{(0,t.it)("stays quiet through silence",()=>{const e=(0,c.createSegmenter)();(0,t.expect)(o(e,n,40)).toEqual([]),(0,t.expect)(e.isSpeaking()).toBe(!1)}),(0,t.it)("opens a segment when speech starts and closes it after the hangover",()=>{const e=(0,c.createSegmenter)();o(e,n,20),(0,t.expect)(o(e,a,10)).toEqual(["start"]),(0,t.expect)(e.isSpeaking()).toBe(!0);const s=o(e,n,15);(0,t.expect)(s).toEqual(["end"]),(0,t.expect)(e.isSpeaking()).toBe(!1)}),(0,t.it)("rides through a short pause instead of cutting mid-sentence",()=>{const e=(0,c.createSegmenter)();o(e,n,20),o(e,a,10),(0,t.expect)(o(e,n,5)).toEqual([]),(0,t.expect)(e.isSpeaking()).toBe(!0),(0,t.expect)(o(e,a,5)).toEqual([]),(0,t.expect)(e.isSpeaking()).toBe(!0)}),(0,t.it)("discards a blip too short to be speech",()=>{const e=(0,c.createSegmenter)({minSpeechMs:400,hangoverMs:200});o(e,n,20),o(e,a,1);const s=o(e,n,6);(0,t.expect)(s).toEqual(["abort"])}),(0,t.it)("force-cuts a monologue at the maximum segment length",()=>{const e=(0,c.createSegmenter)({maxSegmentMs:1e3});o(e,n,20);const s=o(e,a,30);(0,t.expect)(s[0]).toBe("start"),(0,t.expect)(s).toContain("end")}),(0,t.it)("raises its threshold in a noisy room",()=>{const e=(0,c.createSegmenter)(),s=(0,c.createSegmenter)();o(e,.002,60),o(s,.05,60),(0,t.expect)(o(e,.03,3)).toEqual(["start"]),(0,t.expect)(o(s,.03,3)).toEqual([]),(0,t.expect)(s.levels().noiseFloor).toBeGreaterThan(e.levels().noiseFloor)}),(0,t.it)("resets cleanly between captures",()=>{const e=(0,c.createSegmenter)();o(e,n,20),o(e,a,5),(0,t.expect)(e.isSpeaking()).toBe(!0),e.reset(),(0,t.expect)(e.isSpeaking()).toBe(!1)})});
+import { describe, it, expect } from 'vitest';
+import { createSegmenter } from '../src/renderer/lib/vadSegmenter.js';
+
+const FRAME = 1024;
+const RATE = 16000;
+const FRAME_MS = FRAME / RATE * 1000;
+
+function frame(amplitude) {
+  const buf = new Float32Array(FRAME);
+  for (let i = 0; i < FRAME; i += 1) {
+
+    buf[i] = i % 2 === 0 ? amplitude : -amplitude;
+  }
+  return buf;
+}
+
+
+function feed(segmenter, amplitude, count) {
+  const events = [];
+  for (let i = 0; i < count; i += 1) {
+    const event = segmenter.push(frame(amplitude), FRAME_MS);
+    if (event) events.push(event);
+  }
+  return events;
+}
+
+const SILENCE = 0.001;
+const SPEECH = 0.2;
+
+describe('VAD segmenter', () => {
+  it('stays quiet through silence', () => {
+    const vad = createSegmenter();
+    expect(feed(vad, SILENCE, 40)).toEqual([]);
+    expect(vad.isSpeaking()).toBe(false);
+  });
+
+  it('opens a segment when speech starts and closes it after the hangover', () => {
+    const vad = createSegmenter();
+    feed(vad, SILENCE, 20);
+
+    expect(feed(vad, SPEECH, 10)).toEqual(['start']);
+    expect(vad.isSpeaking()).toBe(true);
+
+
+    const events = feed(vad, SILENCE, 15);
+    expect(events).toEqual(['end']);
+    expect(vad.isSpeaking()).toBe(false);
+  });
+
+  it('rides through a short pause instead of cutting mid-sentence', () => {
+    const vad = createSegmenter();
+    feed(vad, SILENCE, 20);
+    feed(vad, SPEECH, 10);
+
+
+    expect(feed(vad, SILENCE, 5)).toEqual([]);
+    expect(vad.isSpeaking()).toBe(true);
+
+    expect(feed(vad, SPEECH, 5)).toEqual([]);
+    expect(vad.isSpeaking()).toBe(true);
+  });
+
+  it('discards a blip too short to be speech', () => {
+    const vad = createSegmenter({ minSpeechMs: 400, hangoverMs: 200 });
+    feed(vad, SILENCE, 20);
+
+    feed(vad, SPEECH, 1);
+    const events = feed(vad, SILENCE, 6);
+    expect(events).toEqual(['abort']);
+  });
+
+  it('force-cuts a monologue at the maximum segment length', () => {
+    const vad = createSegmenter({ maxSegmentMs: 1000 });
+    feed(vad, SILENCE, 20);
+
+    const events = feed(vad, SPEECH, 30);
+    expect(events[0]).toBe('start');
+    expect(events).toContain('end');
+  });
+
+  it('raises its threshold in a noisy room', () => {
+    const quiet = createSegmenter();
+    const noisy = createSegmenter();
+
+    feed(quiet, 0.002, 60);
+    feed(noisy, 0.05, 60);
+
+
+    expect(feed(quiet, 0.03, 3)).toEqual(['start']);
+    expect(feed(noisy, 0.03, 3)).toEqual([]);
+    expect(noisy.levels().noiseFloor).toBeGreaterThan(quiet.levels().noiseFloor);
+  });
+
+  it('resets cleanly between captures', () => {
+    const vad = createSegmenter();
+    feed(vad, SILENCE, 20);
+    feed(vad, SPEECH, 5);
+    expect(vad.isSpeaking()).toBe(true);
+
+    vad.reset();
+    expect(vad.isSpeaking()).toBe(false);
+  });
+});

@@ -1,2 +1,144 @@
-var m=Object.create,p=Object.defineProperty,g=Object.getOwnPropertyDescriptor,f=Object.getOwnPropertyNames,h=Object.getPrototypeOf,v=Object.prototype.hasOwnProperty,y=(e,t,a,s)=>{if(t&&typeof t=="object"||typeof t=="function")for(let i of f(t))!v.call(e,i)&&i!==a&&p(e,i,{get:()=>t[i],enumerable:!(s=g(t,i))||s.enumerable});return e},d=(e,t,a)=>(a=e!=null?m(h(e)):{},y(t||!e||!e.__esModule?p(a,"default",{value:e,enumerable:!0}):a,e)),r=require("vitest"),j=require("node:module"),c=d(require("node:fs")),w=d(require("node:os")),b=d(require("node:path"));const l={},o=(0,j.createRequire)(l.url);let u;const n={invoke:{},on:{}},k=[];(0,r.beforeAll)(()=>{u=c.default.mkdtempSync(b.default.join(w.default.tmpdir(),"sidecar-main-"));const e=o.resolve("electron");o.cache[e]={id:e,filename:e,loaded:!0,exports:{app:{getPath:()=>u,quit(){},on(){},whenReady:()=>Promise.resolve()},safeStorage:{isEncryptionAvailable:()=>!1},ipcMain:{handle:(t,a)=>{n.invoke[t]=a},on:(t,a)=>{n.on[t]=a}},shell:{openExternal:()=>Promise.resolve()},globalShortcut:{register:()=>!0,unregisterAll(){}},desktopCapturer:{getSources:()=>Promise.resolve([])},screen:{getPrimaryDisplay:()=>({workArea:{x:0,y:0,width:1920,height:1080}})},BrowserWindow:class{},session:{defaultSession:{}}}}}),(0,r.afterAll)(()=>{try{c.default.rmSync(u,{recursive:!0,force:!0})}catch{}}),(0,r.describe)("main process modules",()=>{(0,r.it)("all load without throwing",{timeout:3e4},()=>{const e=["../src/main/KeyStore.js","../src/main/RateLimiter.js","../src/main/SettingsManager.js","../src/main/MediaCapture.js","../src/main/WindowManager.js","../src/main/ShortcutsManager.js","../src/main/TranscriptionService.js","../src/main/LlmService.js","../src/main/IpcRouter.js","../src/main/providers/index.js"];for(const t of e)(0,r.expect)(()=>o(t),`${t} should load`).not.toThrow()}),(0,r.it)("registers the core IPC channels",()=>{const e=o("../src/main/IpcRouter.js"),t=o("../src/main/WindowManager.js");t.send=(a,s)=>k.push({channel:a,data:s}),e.initialize();for(const a of["sidecar:settings:get","sidecar:settings:set","sidecar:models:list","sidecar:usage:get","sidecar:toggle-listening"])(0,r.expect)(Object.keys(n.invoke)).toContain(a);for(const a of["sidecar:audio-chunk","sidecar:run-mode","sidecar:mouse-ignore","sidecar:open-url","sidecar:log"])(0,r.expect)(Object.keys(n.on)).toContain(a)}),(0,r.it)("exposes every registered channel through the preload bridge",()=>{const e=c.default.readFileSync(new URL("../src/preload/index.js",l.url),"utf8");for(const t of[...Object.keys(n.invoke),...Object.keys(n.on)])(0,r.expect)(e,`preload should call ${t}`).toContain(t)}),(0,r.it)("whitelists every channel main actually sends to the renderer",()=>{const e=c.default.readFileSync(new URL("../src/preload/index.js",l.url),"utf8"),t=["IpcRouter.js","WindowManager.js"].map(s=>c.default.readFileSync(new URL(`../src/main/${s}`,l.url),"utf8")).join(`
-`),a=new Set([...t.matchAll(/send\(\s*'([a-z:]+)'/g)].map(s=>s[1]));for(const s of a)(0,r.expect)(e,`preload must whitelist "${s}"`).toContain(`'${s}'`);(0,r.expect)(a.size).toBeGreaterThan(4)}),(0,r.it)("returns a redacted settings view over IPC",async()=>{o("../src/main/SettingsManager.js").set({llm:{apiKeys:{openai:"sk-should-never-leave-main"}}});const e=await n.invoke["sidecar:settings:get"]();(0,r.expect)(JSON.stringify(e)).not.toContain("sk-should-never-leave-main"),(0,r.expect)(e.keyPresence.llm.openai).toBe(!0)}),(0,r.it)("reports a usage snapshot over IPC",async()=>{const e=await n.invoke["sidecar:usage:get"]();(0,r.expect)(e).toHaveProperty("openai"),(0,r.expect)(e.openai).toHaveProperty("remainingDay")})});
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { createRequire } from 'node:module';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
+const require = createRequire(import.meta.url);
+
+let tmpDir;
+
+
+
+
+
+
+const handlers = { invoke: {}, on: {} };
+const sent = [];
+
+beforeAll(() => {
+  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sidecar-main-'));
+  const electronPath = require.resolve('electron');
+  require.cache[electronPath] = {
+    id: electronPath,
+    filename: electronPath,
+    loaded: true,
+    exports: {
+      app: { getPath: () => tmpDir, quit() {}, on() {}, whenReady: () => Promise.resolve() },
+      safeStorage: { isEncryptionAvailable: () => false },
+      ipcMain: {
+        handle: (channel, fn) => {
+          handlers.invoke[channel] = fn;
+        },
+        on: (channel, fn) => {
+          handlers.on[channel] = fn;
+        }
+      },
+      shell: { openExternal: () => Promise.resolve() },
+      globalShortcut: { register: () => true, unregisterAll() {} },
+      desktopCapturer: { getSources: () => Promise.resolve([]) },
+      screen: {
+        getPrimaryDisplay: () => ({ workArea: { x: 0, y: 0, width: 1920, height: 1080 } })
+      },
+      BrowserWindow: class {},
+      session: { defaultSession: {} }
+    }
+  };
+});
+
+afterAll(() => {
+  try {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  } catch (e) {
+
+  }
+});
+
+describe('main process modules', () => {
+
+
+  it('all load without throwing', { timeout: 30000 }, () => {
+    const modules = [
+    '../src/main/KeyStore.js',
+    '../src/main/RateLimiter.js',
+    '../src/main/SettingsManager.js',
+    '../src/main/MediaCapture.js',
+    '../src/main/WindowManager.js',
+    '../src/main/ShortcutsManager.js',
+    '../src/main/TranscriptionService.js',
+    '../src/main/LlmService.js',
+    '../src/main/IpcRouter.js',
+    '../src/main/providers/index.js'];
+
+    for (const mod of modules) {
+      expect(() => require(mod), `${mod} should load`).not.toThrow();
+    }
+  });
+
+  it('registers the core IPC channels', () => {
+    const IpcRouter = require('../src/main/IpcRouter.js');
+    const WindowManager = require('../src/main/WindowManager.js');
+    WindowManager.send = (channel, data) => sent.push({ channel, data });
+
+    IpcRouter.initialize();
+
+    for (const channel of [
+    'sidecar:settings:get',
+    'sidecar:settings:set',
+    'sidecar:models:list',
+    'sidecar:usage:get',
+    'sidecar:toggle-listening'])
+    {
+      expect(Object.keys(handlers.invoke)).toContain(channel);
+    }
+    for (const channel of [
+    'sidecar:audio-chunk',
+    'sidecar:run-mode',
+    'sidecar:mouse-ignore',
+    'sidecar:open-url',
+    'sidecar:log'])
+    {
+      expect(Object.keys(handlers.on)).toContain(channel);
+    }
+  });
+
+  it('exposes every registered channel through the preload bridge', () => {
+    const preload = fs.readFileSync(new URL('../src/preload/index.js', import.meta.url), 'utf8');
+    for (const channel of [...Object.keys(handlers.invoke), ...Object.keys(handlers.on)]) {
+      expect(preload, `preload should call ${channel}`).toContain(channel);
+    }
+  });
+
+  it('whitelists every channel main actually sends to the renderer', () => {
+    const preload = fs.readFileSync(new URL('../src/preload/index.js', import.meta.url), 'utf8');
+    const mainSources = ['IpcRouter.js', 'WindowManager.js'].
+    map((f) => fs.readFileSync(new URL(`../src/main/${f}`, import.meta.url), 'utf8')).
+    join('\n');
+
+    const sentChannels = new Set(
+      [...mainSources.matchAll(/send\(\s*['"]([a-z:]+)['"]/g)].map((m) => m[1])
+    );
+
+    for (const channel of sentChannels) {
+      expect(preload, `preload must whitelist "${channel}"`).toMatch(
+        new RegExp(`['"]${channel}['"]`)
+      );
+    }
+    expect(sentChannels.size).toBeGreaterThan(4);
+  });
+
+  it('returns a redacted settings view over IPC', async () => {
+    const SettingsManager = require('../src/main/SettingsManager.js');
+    SettingsManager.set({ llm: { apiKeys: { openai: 'sk-should-never-leave-main' } } });
+
+    const view = await handlers.invoke['sidecar:settings:get']();
+    expect(JSON.stringify(view)).not.toContain('sk-should-never-leave-main');
+    expect(view.keyPresence.llm.openai).toBe(true);
+  });
+
+  it('reports a usage snapshot over IPC', async () => {
+    const snapshot = await handlers.invoke['sidecar:usage:get']();
+    expect(snapshot).toHaveProperty('openai');
+    expect(snapshot.openai).toHaveProperty('remainingDay');
+  });
+});
