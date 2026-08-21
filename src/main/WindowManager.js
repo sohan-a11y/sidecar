@@ -22,52 +22,113 @@ class WindowManager {
     if (!targetWindow || targetWindow.isDestroyed()) {
       return false;
     }
+
     const rawValue = String(process.env.SIDECAR_NO_PROTECT || '')
       .trim()
       .toLowerCase();
+
     const disabled = rawValue === '1' || rawValue === 'true';
-    
-    console.log(`[WindowManager] Content protection disabled for ${label} check:`, disabled);
+
+    console.log(
+      `[WindowManager] Content protection disabled for ${label}:`,
+      disabled
+    );
 
     if (disabled) {
-      console.warn(
-        `[WindowManager] Content protection disabled for ${label}.`
-      );
       targetWindow.setContentProtection(false);
       return false;
     }
+
     try {
-      // Important: apply opacity first.
-      targetWindow.setOpacity(1);
-      // Electron applies WDA_EXCLUDEFROMCAPTURE on supported Windows.
+      // Opacity must already have been set by the caller.
       targetWindow.setContentProtection(true);
+
+      let nativeResult = null;
+
       if (process.platform === 'win32') {
-        try {
-          const DisplayAdapter = require('../../DisplayAdapter');
-          const nativeResult = DisplayAdapter.protectWindow(targetWindow);
-          const currentAffinity = DisplayAdapter.checkWindowAffinity(targetWindow);
-          console.log(
-            `[WindowManager] Native protection for ${label}:`,
-            nativeResult,
-            `Read affinity:`,
-            currentAffinity !== null ? `0x${currentAffinity.toString(16)}` : 'unknown'
+        const DisplayAdapter = require('../../DisplayAdapter');
+
+        nativeResult = DisplayAdapter.protectWindow(targetWindow);
+
+        const affinity = DisplayAdapter.checkWindowAffinity(targetWindow);
+
+        console.log(
+          `[WindowManager] ${label}:`,
+          `native=${nativeResult}`,
+          `affinity=${
+            affinity === null
+              ? 'unknown'
+              : `0x${affinity.toString(16)}`
+          }`
+        );
+
+        if (affinity !== 0x11) {
+          console.error(
+            `[WindowManager] Protection failed for ${label}. ` +
+            `Expected affinity 0x11.`
           );
-        } catch (error) {
-          console.warn(
-            `[WindowManager] Native protection unavailable for ${label}:`,
-            error.message
-          );
+
+          return false;
         }
       }
+
       console.log(
-        `[WindowManager] Content protection requested for ${label}.`
+        `[WindowManager] Protection active for ${label}.`
       );
+
       return true;
     } catch (error) {
       console.error(
         `[WindowManager] Failed to protect ${label}:`,
         error
       );
+
+      return false;
+    }
+  }
+
+  verifyContentProtection(targetWindow, label = 'window') {
+    if (
+      process.platform !== 'win32' ||
+      !targetWindow ||
+      targetWindow.isDestroyed()
+    ) {
+      return false;
+    }
+
+    try {
+      const DisplayAdapter = require('../../DisplayAdapter');
+      const affinity = DisplayAdapter.checkWindowAffinity(targetWindow);
+
+      const expected = 0x11;
+      const valid = affinity === expected;
+
+      console.log(
+        `[WindowManager] ${label} affinity verification:`,
+        affinity === null
+          ? 'unavailable'
+          : `0x${affinity.toString(16)}`,
+        valid ? 'PASS' : 'FAIL'
+      );
+
+      if (!valid) {
+        console.error(
+          `[WindowManager] ${label} is not excluded from capture. ` +
+          `Expected 0x11, received ${
+            affinity === null
+              ? 'null'
+              : `0x${affinity.toString(16)}`
+          }.`
+        );
+      }
+
+      return valid;
+    } catch (error) {
+      console.error(
+        `[WindowManager] Could not verify ${label}:`,
+        error.message
+      );
+
       return false;
     }
   }
@@ -106,6 +167,9 @@ class WindowManager {
         webviewTag: true
       }
     });
+
+    // Set visually required opacity state first
+    this.window.setOpacity(1);
 
     // Apply content protection initially
     this.applyContentProtection(this.window, 'main overlay');
@@ -150,7 +214,7 @@ class WindowManager {
 
     this.window.webContents.on('did-finish-load', () => {
       console.log('[WindowManager] Renderer finished loading');
-      this.window.setOpacity(1);
+      
       const { workArea } = screen.getPrimaryDisplay();
       this.window.setBounds({
         x: Math.round(workArea.x + (workArea.width - 720) / 2),
@@ -158,9 +222,18 @@ class WindowManager {
         width: 720,
         height: 650
       });
-      // Reapply after Chromium has created and displayed its surface.
-      this.applyContentProtection(this.window, 'main overlay after load');
+      
+      // applyPassiveMode sets opacity, shows the window,
+      // and then applies content protection last.
       this.applyPassiveMode();
+
+      // Delayed verification after the window has settled.
+      setTimeout(() => {
+        this.verifyContentProtection(
+          this.window,
+          'main overlay settled'
+        );
+      }, 1000);
     });
 
     this.window.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedUrl) => {
@@ -186,25 +259,52 @@ class WindowManager {
   }
 
   applyPassiveMode() {
-    if (!this.window || this.window.isDestroyed()) return false;
+    if (!this.window || this.window.isDestroyed()) {
+      return false;
+    }
+
     this.currentMode = WINDOW_MODE.PASSIVE;
+
     this.window.setIgnoreMouseEvents(true, { forward: true });
     this.window.setFocusable(false);
     this.window.setSkipTaskbar(true);
     this.window.setAlwaysOnTop(true, 'floating');
+
+    // Set visual/window properties first.
     this.window.setOpacity(1);
     this.window.showInactive();
+
+    // Apply protection last.
+    this.applyContentProtection(
+      this.window,
+      'main overlay passive mode'
+    );
+
     return true;
   }
 
   applyInteractiveMode() {
-    if (!this.window || this.window.isDestroyed()) return false;
+    if (!this.window || this.window.isDestroyed()) {
+      return false;
+    }
+
     this.currentMode = WINDOW_MODE.INTERACTIVE;
+
     this.window.setIgnoreMouseEvents(false);
     this.window.setFocusable(true);
     this.window.setSkipTaskbar(true);
     this.window.setAlwaysOnTop(true, 'floating');
-    if (!this.window.isVisible()) this.window.show();
+
+    if (!this.window.isVisible()) {
+      this.window.show();
+    }
+
+    // Apply protection after showing or changing styles.
+    this.applyContentProtection(
+      this.window,
+      'main overlay interactive mode'
+    );
+
     return true;
   }
 
@@ -263,19 +363,50 @@ class WindowManager {
   }
 
   applyOverlaySettings() {
-    if (!this.window || this.window.isDestroyed()) return;
+    if (!this.window || this.window.isDestroyed()) {
+      return;
+    }
+
     const overlay = settings.get().overlay || {};
-    const opacity = Math.min(1, Math.max(0.25, overlay.opacity || 1));
+
+    const opacity = Math.min(
+      1,
+      Math.max(0.25, overlay.opacity || 1)
+    );
+
     this.window.setOpacity(opacity);
-    this.send('overlay:style', { fontScale: overlay.fontScale || 1, density: overlay.density || 'comfortable' });
+
+    this.send('overlay:style', {
+      fontScale: overlay.fontScale || 1,
+      density: overlay.density || 'comfortable'
+    });
+
+    // setOpacity must happen before protection.
+    this.applyContentProtection(
+      this.window,
+      'main overlay after visual settings'
+    );
   }
 
   toggleVisibility() {
-    if (!this.window || this.window.isDestroyed()) return false;
+    if (!this.window || this.window.isDestroyed()) {
+      return false;
+    }
+
     const currentlyVisible = this.window.isVisible();
-    if (currentlyVisible) this.window.hide();
-    else { this.applyPassiveMode(); this.window.showInactive(); }
-    settings.set({ overlay: { hidden: currentlyVisible } });
+
+    if (currentlyVisible) {
+      this.window.hide();
+    } else {
+      this.applyPassiveMode();
+    }
+
+    settings.set({
+      overlay: {
+        hidden: currentlyVisible
+      }
+    });
+
     return !currentlyVisible;
   }
 
@@ -328,6 +459,10 @@ class WindowManager {
 
     this.regionWindow.setAlwaysOnTop(true, 'screen-saver', 2);
 
+    // Apply visual options first
+    this.regionWindow.setOpacity(1);
+
+    // Apply protection
     this.applyContentProtection(this.regionWindow, 'region picker');
 
     if (process.env.NODE_ENV === 'development') {
