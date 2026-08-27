@@ -377,8 +377,7 @@ function App() {
       }
       await audioContextSystem.resume();
       
-      const audioStream = new MediaStream(audioTracks);
-      loopbackSource = audioContextSystem.createMediaStreamSource(audioStream);
+      loopbackSource = audioContextSystem.createMediaStreamSource(loopback);
       loopbackProcessor = audioContextSystem.createScriptProcessor(4096, 1, 1);
       
       const systemGain = audioContextSystem.createGain();
