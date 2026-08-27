@@ -300,7 +300,9 @@ function App() {
       const tracks = micStream.getAudioTracks();
       console.log(`[App] Found ${tracks.length} mic track(s)`);
       
-      audioContextUser = new AudioContext({ sampleRate: 16000 });
+      if (!audioContextUser || audioContextUser.state === "closed") {
+        audioContextUser = new AudioContext({ sampleRate: 16000 });
+      }
       await audioContextUser.resume();
       
       micSource = audioContextUser.createMediaStreamSource(micStream);
@@ -352,7 +354,9 @@ function App() {
       }
       
       loopbackStream = loopback;
-      audioContextSystem = new AudioContext({ sampleRate: 16000 });
+      if (!audioContextSystem || audioContextSystem.state === "closed") {
+        audioContextSystem = new AudioContext({ sampleRate: 16000 });
+      }
       await audioContextSystem.resume();
       
       const audioStream = new MediaStream(audioTracks);
@@ -395,9 +399,8 @@ function App() {
       micSource.disconnect();
       micSource = null;
     }
-    if (audioContextUser) {
-      audioContextUser.close();
-      audioContextUser = null;
+    if (audioContextUser && audioContextUser.state !== "closed") {
+      audioContextUser.suspend().catch((e) => console.warn(e));
     }
     if (micStream) {
       micStream.getTracks().forEach((track) => track.stop());
@@ -412,9 +415,8 @@ function App() {
       loopbackSource.disconnect();
       loopbackSource = null;
     }
-    if (audioContextSystem) {
-      audioContextSystem.close();
-      audioContextSystem = null;
+    if (audioContextSystem && audioContextSystem.state !== "closed") {
+      audioContextSystem.suspend().catch((e) => console.warn(e));
     }
     if (loopbackStream) {
       loopbackStream.getTracks().forEach((track) => track.stop());
