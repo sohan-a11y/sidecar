@@ -293,7 +293,12 @@ function App() {
     try {
       console.log("[App] Attempting getUserMedia for microphone...");
       micStream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 }
+        audio: {
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false,
+          channelCount: 1
+        }
       });
       console.log("[App] getUserMedia resolved successfully");
       
