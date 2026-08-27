@@ -171,6 +171,8 @@ class WindowManager {
     // Set visually required opacity state first
     this.window.setOpacity(1);
 
+    this.window.setAlwaysOnTop(true, 'screen-saver', 1);
+
     // Apply content protection initially
     this.applyContentProtection(this.window, 'main overlay');
 
@@ -268,7 +270,7 @@ class WindowManager {
     this.window.setIgnoreMouseEvents(true, { forward: true });
     this.window.setFocusable(false);
     this.window.setSkipTaskbar(true);
-    this.window.setAlwaysOnTop(true, 'floating');
+    this.window.setAlwaysOnTop(true, 'screen-saver', 1);
 
     // Set visual/window properties first.
     this.window.setOpacity(1);
@@ -293,7 +295,7 @@ class WindowManager {
     this.window.setIgnoreMouseEvents(false);
     this.window.setFocusable(true);
     this.window.setSkipTaskbar(true);
-    this.window.setAlwaysOnTop(true, 'floating');
+    this.window.setAlwaysOnTop(true, 'screen-saver', 1);
 
     if (!this.window.isVisible()) {
       this.window.show();
