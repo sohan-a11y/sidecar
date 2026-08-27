@@ -16,6 +16,9 @@ let loopbackSource = null;
 let loopbackProcessor = null;
 let audioContextSystem = null;
 
+let lastSystemLevelLogAt = 0;
+let systemSilentSince = 0;
+
 const vadSegmenters = {
   user: null,
   system: null
@@ -351,23 +354,122 @@ function App() {
 
     try {
       console.log("[App] Attempting getDisplayMedia for loopback audio...");
-      const loopback = await navigator.mediaDevices.getDisplayMedia({
-        video: true,
-        audio: {
-          systemAudio: "include"
-        }
-      });
+      const loopback =
+        await navigator.mediaDevices.getDisplayMedia({
+          video: {
+            frameRate: {
+              ideal: 1,
+              max: 1
+            }
+          },
+          audio: {
+            systemAudio: "include",
+            channelCount: {
+              ideal: 2
+            },
+            echoCancellation: false,
+            noiseSuppression: false,
+            autoGainControl: false
+          }
+        });
       console.log("[App] getDisplayMedia resolved successfully");
       
+      const allLoopbackTracks = loopback.getTracks();
       const audioTracks = loopback.getAudioTracks();
-      console.log(`[App] Found ${audioTracks.length} audio track(s)`);
-      
+      const videoTracks = loopback.getVideoTracks();
+
+      console.log("[App] Loopback stream acquired.");
+
+      console.log(
+        "[App] Loopback tracks:",
+        allLoopbackTracks.map((track) => ({
+          kind: track.kind,
+          label: track.label,
+          enabled: track.enabled,
+          muted: track.muted,
+          readyState: track.readyState,
+          settings:
+            typeof track.getSettings === "function"
+              ? track.getSettings()
+              : {}
+        }))
+      );
+
+      console.log(
+        `[App] Found ${audioTracks.length} audio track(s) ` +
+        `and ${videoTracks.length} video track(s)`
+      );
+
+      for (const track of audioTracks) {
+        track.addEventListener("mute", () => {
+          console.warn(
+            "[App] System audio track became muted:",
+            track.label
+          );
+
+          sidecar.log(
+            `System audio track muted: ${track.label || "unknown track"}`
+          );
+        });
+
+        track.addEventListener("unmute", () => {
+          console.log(
+            "[App] System audio track resumed:",
+            track.label
+          );
+
+          sidecar.log(
+            `System audio track resumed: ${track.label || "unknown track"}`
+          );
+        });
+
+        track.addEventListener("ended", () => {
+          console.warn(
+            "[App] System audio track ended:",
+            track.label
+          );
+
+          sidecar.log(
+            `System audio track ended: ${track.label || "unknown track"}`
+          );
+
+          setStatusMessage(
+            "System audio capture ended. Restart listening to reconnect."
+          );
+
+          setTimeout(
+            () => setStatusMessage(""),
+            10000
+          );
+        });
+      }
+
       if (audioTracks.length === 0) {
-        console.warn("[App] Loopback audio tracks array is empty.");
-        sidecar.log("System Audio Loopback: Unsupported or Screen Recording permission is missing.");
-        setStatusMessage("System audio Loopback unsupported — check Screen Recording permissions in System Settings.");
-        setTimeout(() => setStatusMessage(""), 10000);
-        loopback.getTracks().forEach((track) => track.stop());
+        console.warn(
+          "[App] Display capture succeeded, but no system audio " +
+          "track was returned."
+        );
+
+        sidecar.log(
+          "System audio unavailable: display capture returned " +
+          "no audio track."
+        );
+
+        setStatusMessage(
+          "No system audio track was returned. Make sure the " +
+          "selected output device is active and Zoom uses the " +
+          "same device as Windows."
+        );
+
+        setTimeout(
+          () => setStatusMessage(""),
+          10000
+        );
+
+        loopback
+          .getTracks()
+          .forEach((track) => track.stop());
+
         return;
       }
       
@@ -377,7 +479,8 @@ function App() {
       }
       await audioContextSystem.resume();
       
-      loopbackSource = audioContextSystem.createMediaStreamSource(loopback);
+      const audioStream = new MediaStream(audioTracks);
+      loopbackSource = audioContextSystem.createMediaStreamSource(audioStream);
       loopbackProcessor = audioContextSystem.createScriptProcessor(4096, 1, 1);
       
       const systemGain = audioContextSystem.createGain();
@@ -387,14 +490,120 @@ function App() {
       loopbackProcessor.connect(systemGain);
       systemGain.connect(audioContextSystem.destination);
       
-      vadSegmenters.system = createSegmenter();
+      vadSegmenters.system = createSegmenter({
+        activationRatio: 2.2,
+        releaseRatio: 1.4,
+        minAbsoluteRms: 0.0035,
+        minSpeechMs: 220,
+        hangoverMs: 850,
+        maxSegmentMs: 15000,
+        noiseAdaptation: 0.015
+      });
+
       loopbackProcessor.onaudioprocess = (event) => {
-        const inputData = event.inputBuffer.getChannelData(0);
-        const resampled = resample(inputData, audioContextSystem.sampleRate, 16000);
-        handleAudioChunk(sidecar, "system", resampled, 16000);
+        const inputBuffer = event.inputBuffer;
+        const channelCount = inputBuffer.numberOfChannels;
+        const frameCount = inputBuffer.length;
+
+        if (channelCount === 0 || frameCount === 0) {
+          return;
+        }
+
+        /*
+         * Downmix every available channel to mono.
+         *
+         * Call audio is often stereo. Reading only channel zero
+         * can occasionally miss or weaken audio depending on the
+         * application and output-device configuration.
+         */
+        const mono = new Float32Array(frameCount);
+
+        for (
+          let channel = 0;
+          channel < channelCount;
+          channel += 1
+        ) {
+          const channelData =
+            inputBuffer.getChannelData(channel);
+
+          for (
+            let index = 0;
+            index < frameCount;
+            index += 1
+          ) {
+            mono[index] +=
+              channelData[index] / channelCount;
+          }
+        }
+
+        let sumSquares = 0;
+        let peak = 0;
+
+        for (
+          let index = 0;
+          index < mono.length;
+          index += 1
+        ) {
+          const sample = mono[index];
+
+          sumSquares += sample * sample;
+          peak = Math.max(peak, Math.abs(sample));
+        }
+
+        const rms = Math.sqrt(
+          sumSquares / Math.max(1, mono.length)
+        );
+
+        const now = Date.now();
+
+        if (rms < 0.0001) {
+          if (systemSilentSince === 0) {
+            systemSilentSince = now;
+          }
+        } else {
+          systemSilentSince = 0;
+        }
+
+        /*
+         * Temporary diagnostic output.
+         * This logs once per second instead of once per buffer.
+         */
+        if (now - lastSystemLevelLogAt >= 1000) {
+          console.log(
+            "[App] System audio level:",
+            {
+              rms: rms.toFixed(6),
+              peak: peak.toFixed(6),
+              channels: channelCount,
+              inputSampleRate:
+                audioContextSystem.sampleRate,
+              silentForMs:
+                systemSilentSince === 0
+                  ? 0
+                  : now - systemSilentSince
+            }
+          );
+
+          lastSystemLevelLogAt = now;
+        }
+
+        const resampled = resample(
+          mono,
+          audioContextSystem.sampleRate,
+          16000
+        );
+
+        handleAudioChunk(
+          sidecar,
+          "system",
+          resampled,
+          16000
+        );
       };
-      
-      sidecar.log("System audio capture initialized successfully.");
+
+      sidecar.log(
+        "System audio loopback initialized successfully."
+      );
     } catch (err) {
       console.error("[App] System audio loopback initialization error:", err);
       sidecar.log(`System Audio Loopback Error: ${err.message}`);
@@ -404,6 +613,9 @@ function App() {
   };
 
   const cleanupAudio = () => {
+    lastSystemLevelLogAt = 0;
+    systemSilentSince = 0;
+
     vadSegmenters.user = null;
     vadSegmenters.system = null;
     if (micProcessor) {
@@ -680,8 +892,6 @@ function App() {
                   id: "browser-webview",
                   src: currentUrl,
                   partition: "persist:browser-session",
-                  preload: window.sidecar.webviewPreloadPath,
-                  allowpopups: "true",
                   style: { width: "100%", height: "100%", border: "none" }
                 })
               ),
