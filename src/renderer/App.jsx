@@ -301,6 +301,8 @@ function App() {
       console.log(`[App] Found ${tracks.length} mic track(s)`);
       
       audioContextUser = new AudioContext({ sampleRate: 16000 });
+      await audioContextUser.resume();
+      
       micSource = audioContextUser.createMediaStreamSource(micStream);
       micProcessor = audioContextUser.createScriptProcessor(4096, 1, 1);
       
@@ -316,6 +318,18 @@ function App() {
         handleAudioChunk(sidecar, "user", event.inputBuffer.getChannelData(0), audioContextUser.sampleRate);
       };
 
+      sidecar.log("Microphone capture initialized successfully.");
+    } catch (err) {
+      console.error("[App] Microphone initialization error:", err);
+      sidecar.log(`Microphone Capture Error: ${err.message}`);
+      setStatusMessage(`Microphone Capture Error: ${err.message}`);
+      setTimeout(() => setStatusMessage(""), 10000);
+      setIsListening(false);
+      sidecar.toggleListening();
+      return;
+    }
+
+    try {
       console.log("[App] Attempting getDisplayMedia for loopback audio...");
       const loopback = await navigator.mediaDevices.getDisplayMedia({
         video: true,
@@ -338,6 +352,8 @@ function App() {
       
       loopbackStream = loopback;
       audioContextSystem = new AudioContext({ sampleRate: 16000 });
+      await audioContextSystem.resume();
+      
       loopbackSource = audioContextSystem.createMediaStreamSource(new MediaStream(audioTracks));
       loopbackProcessor = audioContextSystem.createScriptProcessor(4096, 1, 1);
       
@@ -353,14 +369,12 @@ function App() {
         handleAudioChunk(sidecar, "system", event.inputBuffer.getChannelData(0), audioContextSystem.sampleRate);
       };
       
-      sidecar.log("Audio capture initialized successfully.");
+      sidecar.log("System audio capture initialized successfully.");
     } catch (err) {
-      console.error("[App] Audio initialization error:", err);
-      sidecar.log(`Audio Capture Error: ${err.message}`);
-      setStatusMessage(`Audio Capture Error: ${err.message}`);
+      console.error("[App] System audio loopback initialization error:", err);
+      sidecar.log(`System Audio Loopback Error: ${err.message}`);
+      setStatusMessage(`System Audio Loopback Error: ${err.message}`);
       setTimeout(() => setStatusMessage(""), 10000);
-      setIsListening(false);
-      sidecar.toggleListening();
     }
   };
 
