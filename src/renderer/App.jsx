@@ -355,8 +355,8 @@ function App() {
       audioContextSystem = new AudioContext({ sampleRate: 16000 });
       await audioContextSystem.resume();
       
-      // Pass the original stream instead of new MediaStream(audioTracks) to avoid Chrome silence bugs
-      loopbackSource = audioContextSystem.createMediaStreamSource(loopback);
+      const audioStream = new MediaStream(audioTracks);
+      loopbackSource = audioContextSystem.createMediaStreamSource(audioStream);
       loopbackProcessor = audioContextSystem.createScriptProcessor(4096, 1, 1);
       
       const systemGain = audioContextSystem.createGain();
@@ -366,7 +366,7 @@ function App() {
       loopbackProcessor.connect(systemGain);
       systemGain.connect(audioContextSystem.destination);
       
-      // Safely stop the video tracks after the audio pipeline has been connected
+      // Stop the video tracks on the original stream to save CPU/GPU resources
       loopback.getVideoTracks().forEach((track) => track.stop());
       
       vadSegmenters.system = createSegmenter();
