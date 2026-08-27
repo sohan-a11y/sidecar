@@ -21,6 +21,17 @@ const vadSegmenters = {
   system: null
 };
 
+function resample(inputData, inputSampleRate, outputSampleRate) {
+  if (inputSampleRate === outputSampleRate) return inputData;
+  const ratio = inputSampleRate / outputSampleRate;
+  const newLength = Math.floor(inputData.length / ratio);
+  const result = new Float32Array(newLength);
+  for (let i = 0; i < newLength; i++) {
+    result[i] = inputData[Math.floor(i * ratio)];
+  }
+  return result;
+}
+
 function handleAudioChunk(sidecar, channel, chunk, sampleRate) {
   const int16Array = new Int16Array(chunk.length);
   for (let i = 0; i < chunk.length; i++) {
@@ -306,7 +317,7 @@ function App() {
       console.log(`[App] Found ${tracks.length} mic track(s)`);
       
       if (!audioContextUser || audioContextUser.state === "closed") {
-        audioContextUser = new AudioContext({ sampleRate: 16000 });
+        audioContextUser = new AudioContext(); // Use native sample rate to avoid Chromium resampling bugs
       }
       await audioContextUser.resume();
       
@@ -322,7 +333,9 @@ function App() {
       
       vadSegmenters.user = createSegmenter();
       micProcessor.onaudioprocess = (event) => {
-        handleAudioChunk(sidecar, "user", event.inputBuffer.getChannelData(0), audioContextUser.sampleRate);
+        const inputData = event.inputBuffer.getChannelData(0);
+        const resampled = resample(inputData, audioContextUser.sampleRate, 16000);
+        handleAudioChunk(sidecar, "user", resampled, 16000);
       };
 
       sidecar.log("Microphone capture initialized successfully.");
@@ -360,7 +373,7 @@ function App() {
       
       loopbackStream = loopback;
       if (!audioContextSystem || audioContextSystem.state === "closed") {
-        audioContextSystem = new AudioContext({ sampleRate: 16000 });
+        audioContextSystem = new AudioContext(); // Use native sample rate to avoid Chromium resampling bugs
       }
       await audioContextSystem.resume();
       
@@ -380,7 +393,9 @@ function App() {
       
       vadSegmenters.system = createSegmenter();
       loopbackProcessor.onaudioprocess = (event) => {
-        handleAudioChunk(sidecar, "system", event.inputBuffer.getChannelData(0), audioContextSystem.sampleRate);
+        const inputData = event.inputBuffer.getChannelData(0);
+        const resampled = resample(inputData, audioContextSystem.sampleRate, 16000);
+        handleAudioChunk(sidecar, "system", resampled, 16000);
       };
       
       sidecar.log("System audio capture initialized successfully.");
