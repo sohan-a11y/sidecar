@@ -333,11 +333,12 @@ function App() {
       console.log("[App] Attempting getDisplayMedia for loopback audio...");
       const loopback = await navigator.mediaDevices.getDisplayMedia({
         video: true,
-        audio: true
+        audio: {
+          systemAudio: "include"
+        }
       });
       console.log("[App] getDisplayMedia resolved successfully");
       
-      loopback.getVideoTracks().forEach((track) => track.stop());
       const audioTracks = loopback.getAudioTracks();
       console.log(`[App] Found ${audioTracks.length} audio track(s)`);
       
@@ -354,15 +355,19 @@ function App() {
       audioContextSystem = new AudioContext({ sampleRate: 16000 });
       await audioContextSystem.resume();
       
-      loopbackSource = audioContextSystem.createMediaStreamSource(new MediaStream(audioTracks));
+      // Pass the original stream instead of new MediaStream(audioTracks) to avoid Chrome silence bugs
+      loopbackSource = audioContextSystem.createMediaStreamSource(loopback);
       loopbackProcessor = audioContextSystem.createScriptProcessor(4096, 1, 1);
       
       const systemGain = audioContextSystem.createGain();
-      systemGain.value = 0;
+      systemGain.gain.value = 0;
       
       loopbackSource.connect(loopbackProcessor);
       loopbackProcessor.connect(systemGain);
       systemGain.connect(audioContextSystem.destination);
+      
+      // Safely stop the video tracks after the audio pipeline has been connected
+      loopback.getVideoTracks().forEach((track) => track.stop());
       
       vadSegmenters.system = createSegmenter();
       loopbackProcessor.onaudioprocess = (event) => {
