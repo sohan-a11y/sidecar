@@ -388,9 +388,6 @@ function App() {
       loopbackProcessor.connect(systemGain);
       systemGain.connect(audioContextSystem.destination);
       
-      // Stop the video tracks on the original stream to save CPU/GPU resources
-      loopback.getVideoTracks().forEach((track) => track.stop());
-      
       vadSegmenters.system = createSegmenter();
       loopbackProcessor.onaudioprocess = (event) => {
         const inputData = event.inputBuffer.getChannelData(0);
