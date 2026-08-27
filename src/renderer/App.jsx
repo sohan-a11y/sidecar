@@ -680,6 +680,8 @@ function App() {
                   id: "browser-webview",
                   src: currentUrl,
                   partition: "persist:browser-session",
+                  preload: window.sidecar.webviewPreloadPath,
+                  allowpopups: "true",
                   style: { width: "100%", height: "100%", border: "none" }
                 })
               ),
