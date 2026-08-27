@@ -1,3 +1,4 @@
+/* global window */
 console.log("[SidecarWebview] Preload script loaded successfully.");
 
 const originalGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
