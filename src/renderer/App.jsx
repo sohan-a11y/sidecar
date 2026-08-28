@@ -719,7 +719,8 @@ function App() {
                   style: {
                     width: "100%",
                     height: "380px",
-                    background: "#fff",
+                    background: "rgba(18, 18, 22, 0.85)",
+                    border: "1px solid var(--border-light)",
                     borderRadius: "8px",
                     overflow: "hidden"
                   }

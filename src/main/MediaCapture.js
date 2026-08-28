@@ -112,6 +112,34 @@ class MediaCapture {
     return res.dataUrl;
   }
 
+  async takeHighResScreenshot(sourceId = null) {
+    const capSettings = settingsManager.get().capture || {};
+    const targetSourceId = sourceId || capSettings.sourceId;
+
+    const displays = screen.getAllDisplays();
+    const primary = screen.getPrimaryDisplay();
+    const maxW = Math.max(...displays.map(d => d.bounds.width * (d.scaleFactor || 1)), 3840);
+    const maxH = Math.max(...displays.map(d => d.bounds.height * (d.scaleFactor || 1)), 2160);
+
+    const sources = await desktopCapturer.getSources({
+      types: targetSourceId && targetSourceId.startsWith("window:") ? ["window"] : ["screen", "window"],
+      thumbnailSize: { width: maxW, height: maxH }
+    });
+
+    if (!sources || sources.length === 0) {
+      throw new Error("No display capture sources found.");
+    }
+
+    const selectedSource = (targetSourceId && sources.find(s => s.id === targetSourceId)) || sources[0];
+    const thumbnail = selectedSource.thumbnail;
+
+    if (!thumbnail || thumbnail.isEmpty()) {
+      throw new Error("The selected capture source returned an empty frame.");
+    }
+
+    return thumbnail.toDataURL();
+  }
+
   resetChangeDetection() {
     this.lastHash = null;
   }

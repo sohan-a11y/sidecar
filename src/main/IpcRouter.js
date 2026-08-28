@@ -14,7 +14,7 @@ n.handle("sidecar:capture:ocr", async (event, { dataUrl }) => {
 
 n.handle("sidecar:capture:take-ocr-screenshot", async (event, { sourceId } = {}) => {
   try {
-    const dataUrl = await m.takeScreenshot(sourceId);
+    const dataUrl = await m.takeHighResScreenshot(sourceId);
     if (!dataUrl) {
       return { ok: false, error: "Failed to capture screenshot." };
     }
