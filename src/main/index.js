@@ -10,6 +10,57 @@ if (process.platform === "darwin" && app.dock) {
 
 console.log(`[App] Sidecar starting on platform: ${process.platform} (${process.arch})`);
 
+const ALLOWED_MEDIA_PERMISSIONS = new Set([
+  "media",
+  "microphone",
+  "audioCapture",
+  "videoCapture",
+  "camera",
+  "display-capture"
+]);
+
+function configureBrowserMediaSession() {
+  const browserSession = session.fromPartition(
+    "persist:browser-session"
+  );
+
+  browserSession.setPermissionRequestHandler(
+    (webContents, permission, callback) => {
+      const allowed = ALLOWED_MEDIA_PERMISSIONS.has(permission);
+
+      console.log(
+        "[BrowserMedia] Permission request:",
+        {
+          permission,
+          allowed,
+          url: webContents.getURL()
+        }
+      );
+
+      callback(allowed);
+    }
+  );
+
+  browserSession.setPermissionCheckHandler(
+    (webContents, permission) => {
+      return ALLOWED_MEDIA_PERMISSIONS.has(permission);
+    }
+  );
+
+  browserSession.setDisplayMediaRequestHandler((request, callback) => {
+    desktopCapturer.getSources({ types: ["screen"] }).then((sources) => {
+      if (sources.length > 0) {
+        callback({ video: sources[0], audio: "loopback" });
+      } else {
+        callback();
+      }
+    }).catch((err) => {
+      console.error("[BrowserMedia] Display media request failed:", err);
+      callback();
+    });
+  }, { useSystemPicker: false });
+}
+
 app.whenReady().then(() => {
   IpcRouter.initialize();
 
@@ -23,6 +74,8 @@ app.whenReady().then(() => {
   session.defaultSession.setPermissionCheckHandler((webContents, permission) => {
     return checkPermission(permission);
   });
+
+  configureBrowserMediaSession();
 
   const devCsp = "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:; connect-src 'self' http://localhost:5173 http://localhost:* ws://localhost:*;";
   const prodCsp = "default-src 'self' file:; style-src 'self' 'unsafe-inline' file:; script-src 'self' file:; img-src 'self' data: file:; connect-src 'self';";
