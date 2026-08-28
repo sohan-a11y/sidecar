@@ -16,8 +16,7 @@ export default function PanelBody({
   onSelectMode,
   isListening,
   turns,
-  onCopy,
-  onOpenOcr
+  onCopy
 }) {
   const [activeTab, setActiveTab] = useState("answers");
   const [isWideLayout, setIsWideLayout] = useState(() => window.innerWidth >= SPLIT_THRESHOLD_PX);
@@ -79,16 +78,6 @@ export default function PanelBody({
             {mode.label}
           </button>
         ))}
-
-        <button
-          type="button"
-          className="action-pill-btn"
-          style={{ background: "#e0a45822", borderColor: "#e0a45866", color: "#fff" }}
-          onClick={onOpenOcr}
-          title="Capture screen & extract OCR text"
-        >
-          📷 Screen OCR
-        </button>
       </div>
     </div>
   );

@@ -12,8 +12,7 @@ export default function Header({
   autoAnswer,
   onToggleAutoAnswer,
   isBrowser,
-  onToggleBrowser,
-  onOpenOcr
+  onToggleBrowser
 }) {
   return (
     <div className="header-toolbar-wrapper">
@@ -30,13 +29,6 @@ export default function Header({
         <button className={`tb-collapse-btn ${isCollapsed ? "collapsed" : ""}`} onClick={onToggleCollapse}>
           <span className="arrow-icon" />
           <span>{isCollapsed ? "Show" : "Hide"}</span>
-        </button>
-
-        <div className="tb-divider" />
-
-        <button className="tb-auto-btn" aria-label="Screen Capture OCR" onClick={onOpenOcr}>
-          <span className="auto-dot" style={{ background: "#e0a458", boxShadow: "0 0 6px #e0a458" }} />
-          <span>📷 OCR</span>
         </button>
 
         <div className="tb-divider" />

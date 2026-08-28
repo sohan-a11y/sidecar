@@ -872,7 +872,9 @@ function App() {
                 isSmart: smartModeEnabled,
                 onToggleSmart: handleToggleSmart,
                 onOpenSettings: openSettings,
-                onSubmit: handleSubmitComposer
+                onSubmit: handleSubmitComposer,
+                onOpenOcr: () => handleRunOcr(),
+                onCaptureScreenshot: () => handleCaptureScreenshot()
               })
             )
       ),
