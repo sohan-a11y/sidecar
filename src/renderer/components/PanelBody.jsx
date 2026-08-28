@@ -1,1 +1,95 @@
-import s,{useState as l,useEffect as y}from"react";import N from"./MessageBubble";import g from"./TranscriptPane";const p=860,f=[{id:"assist",label:"Assist",description:"Contextual screen & conversation assist"},{id:"reply",label:"Draft Reply",description:"Suggest spoken reply based on dialogue"},{id:"summarize",label:"Summarize",description:"Recap discussions"},{id:"questions",label:"Questions",description:"Propose follow-up questions"}];function h({messages:n,activeMode:d,onSelectMode:c,isListening:m,turns:e,onCopy:v}){const[t,a]=l("answers"),[u,b]=l(()=>window.innerWidth>=p);y(()=>{const i=()=>b(window.innerWidth>=p);return window.addEventListener("resize",i),()=>window.removeEventListener("resize",i)},[]);const o=s.createElement("div",{className:"messages-viewport"},n.length===0?s.createElement("div",{className:"empty-viewport-state"},s.createElement("p",{className:"primary-empty-text"},"Sidecar Assistant Active"),s.createElement("p",{className:"secondary-empty-text"},m?"Listening to system audio and microphone stream...":"Toggle the status dot above to begin transcription capture.")):n.map((i,w)=>s.createElement(N,{key:w,message:i}))),r=s.createElement(g,{turns:e,onCopy:v});return s.createElement("div",{className:"panel-body-container no-drag"},u?s.createElement("div",{className:"split-view"},s.createElement("div",{className:"split-col"},o),s.createElement("div",{className:"split-col split-col-transcript"},r)):s.createElement(s.Fragment,null,s.createElement("div",{className:"panel-tabs"},s.createElement("button",{className:`panel-tab-btn ${t==="answers"?"active":""}`,onClick:()=>a("answers")},"Answers"),s.createElement("button",{className:`panel-tab-btn ${t==="transcript"?"active":""}`,onClick:()=>a("transcript")},"Transcript",e.length>0?` \xB7 ${e.length}`:"")),t==="answers"?o:r),s.createElement("div",{className:"quick-actions-row"},f.map(i=>s.createElement("button",{key:i.id,className:`action-pill-btn ${d===i.id?"active":""}`,onClick:()=>c(i.id),title:i.description},i.label))))}export{h as default};
+import React, { useState, useEffect } from "react";
+import MessageBubble from "./MessageBubble";
+import TranscriptPane from "./TranscriptPane";
+
+const SPLIT_THRESHOLD_PX = 860;
+const modes = [
+  { id: "assist", label: "Assist", description: "Contextual screen & conversation assist" },
+  { id: "reply", label: "Draft Reply", description: "Suggest spoken reply based on dialogue" },
+  { id: "summarize", label: "Summarize", description: "Recap discussions" },
+  { id: "questions", label: "Questions", description: "Propose follow-up questions" }
+];
+
+export default function PanelBody({
+  messages,
+  activeMode,
+  onSelectMode,
+  isListening,
+  turns,
+  onCopy,
+  onOpenOcr
+}) {
+  const [activeTab, setActiveTab] = useState("answers");
+  const [isWideLayout, setIsWideLayout] = useState(() => window.innerWidth >= SPLIT_THRESHOLD_PX);
+
+  useEffect(() => {
+    const handleResize = () => setIsWideLayout(window.innerWidth >= SPLIT_THRESHOLD_PX);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  const renderAnswersView = () => (
+    <div className="messages-viewport">
+      {messages.length === 0 ? (
+        <div className="empty-viewport-state">
+          <p className="primary-empty-text">Sidecar Assistant Active</p>
+          <p className="secondary-empty-text">
+            {isListening
+              ? "Listening to system audio and microphone stream..."
+              : "Toggle the status dot above to begin transcription capture."}
+          </p>
+        </div>
+      ) : (
+        messages.map((msg, index) => <MessageBubble key={index} message={msg} />)
+      )}
+    </div>
+  );
+
+  const renderTranscriptView = () => <TranscriptPane turns={turns} onCopy={onCopy} />;
+
+  return (
+    <div className="panel-body-container no-drag">
+      {isWideLayout ? (
+        <div className="split-view">
+          <div className="split-col">{renderAnswersView()}</div>
+          <div className="split-col split-col-transcript">{renderTranscriptView()}</div>
+        </div>
+      ) : (
+        <>
+          <div className="panel-tabs">
+            <button className={`panel-tab-btn ${activeTab === "answers" ? "active" : ""}`} onClick={() => setActiveTab("answers")}>
+              Answers
+            </button>
+            <button className={`panel-tab-btn ${activeTab === "transcript" ? "active" : ""}`} onClick={() => setActiveTab("transcript")}>
+              Transcript{turns.length > 0 ? ` · ${turns.length}` : ""}
+            </button>
+          </div>
+          {activeTab === "answers" ? renderAnswersView() : renderTranscriptView()}
+        </>
+      )}
+
+      <div className="quick-actions-row">
+        {modes.map((mode) => (
+          <button
+            key={mode.id}
+            className={`action-pill-btn ${activeMode === mode.id ? "active" : ""}`}
+            onClick={() => onSelectMode(mode.id)}
+            title={mode.description}
+          >
+            {mode.label}
+          </button>
+        ))}
+
+        <button
+          type="button"
+          className="action-pill-btn"
+          style={{ background: "#e0a45822", borderColor: "#e0a45866", color: "#fff" }}
+          onClick={onOpenOcr}
+          title="Capture screen & extract OCR text"
+        >
+          📷 Screen OCR
+        </button>
+      </div>
+    </div>
+  );
+}

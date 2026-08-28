@@ -4,6 +4,7 @@ import PanelBody from "./components/PanelBody";
 import Composer from "./components/Composer";
 import SettingsModal from "./components/SettingsModal";
 import OnboardingGuide from "./components/OnboardingGuide";
+import OcrModal from "./components/OcrModal";
 import { createSegmenter } from "./lib/vadSegmenter";
 
 let micStream = null;
@@ -77,6 +78,48 @@ function App() {
   const [currentUrl, setCurrentUrl] = useState("https://www.google.com");
   const [queuedScreenshots, setQueuedScreenshots] = useState([]);
   const [browserQuery, setBrowserQuery] = useState("");
+
+  // OCR & Screen Capture States
+  const [isOcrOpen, setIsOcrOpen] = useState(false);
+  const [ocrData, setOcrData] = useState(null);
+  const [isOcrProcessing, setIsOcrProcessing] = useState(false);
+  const [captureSources, setCaptureSources] = useState([]);
+  const [selectedSourceId, setSelectedSourceId] = useState(null);
+
+  const loadCaptureSources = async () => {
+    try {
+      const sources = await sidecar.capture.listSources();
+      setCaptureSources(sources || []);
+      if (sources && sources.length > 0 && !selectedSourceId) {
+        setSelectedSourceId(sources[0].id);
+      }
+    } catch (err) {
+      console.error("[App] Failed to load capture sources:", err);
+    }
+  };
+
+  const handleRunOcr = async (sourceId = null) => {
+    setIsOcrProcessing(true);
+    setIsOcrOpen(true);
+    await loadCaptureSources();
+    try {
+      const targetId = sourceId || selectedSourceId;
+      const res = await sidecar.capture.takeOcrScreenshot(targetId);
+      if (res && res.ok) {
+        setOcrData({ dataUrl: res.dataUrl, text: res.text, confidence: res.confidence });
+        setStatusMessage(`OCR Extracted ${res.text ? res.text.length : 0} characters.`);
+      } else {
+        setOcrData({ text: "", error: res ? res.error : "Failed to capture OCR screen." });
+        setStatusMessage(`OCR Error: ${res ? res.error : "Unknown error"}`);
+      }
+    } catch (err) {
+      console.error("[App] OCR capture error:", err);
+      setOcrData({ text: "", error: err.message });
+    } finally {
+      setIsOcrProcessing(false);
+      setTimeout(() => setStatusMessage(""), 4000);
+    }
+  };
 
   useEffect(() => {
     bootstrap();
@@ -602,7 +645,8 @@ function App() {
       onOpenOnboarding: openOnboarding,
       statusMessage: statusMessage,
       isBrowser: isBrowser,
-      onToggleBrowser: handleToggleBrowser
+      onToggleBrowser: handleToggleBrowser,
+      onOpenOcr: () => handleRunOcr()
     }),
     !isCollapsed &&
       React.createElement(
@@ -700,6 +744,11 @@ function App() {
                     "button",
                     { className: "action-pill-btn", onClick: handleCaptureScreenshot, style: { fontSize: "12px", cursor: "pointer" } },
                     "📸 Capture Screen"
+                  ),
+                  React.createElement(
+                    "button",
+                    { className: "action-pill-btn", onClick: () => handleRunOcr(), style: { fontSize: "12px", cursor: "pointer", background: "#e0a45822" } },
+                    "📷 Screen OCR"
                   ),
                   queuedScreenshots.length > 0 &&
                     React.createElement(
@@ -806,7 +855,8 @@ function App() {
                   setActiveMode(m);
                   sidecar.runMode({ mode: m, text: "" });
                 },
-                isListening: isListening
+                isListening: isListening,
+                onOpenOcr: () => handleRunOcr()
               }),
               React.createElement(Composer, {
                 isStreaming: isStreaming,
@@ -835,6 +885,20 @@ function App() {
       isOpen: isOnboardingOpen,
       onClose: closeOnboarding,
       sidecar: sidecar
+    }),
+    React.createElement(OcrModal, {
+      isOpen: isOcrOpen,
+      onClose: () => setIsOcrOpen(false),
+      ocrData: ocrData,
+      isProcessing: isOcrProcessing,
+      sources: captureSources,
+      selectedSourceId: selectedSourceId,
+      onSelectSource: (id) => setSelectedSourceId(id),
+      onRunOcr: (id) => handleRunOcr(id),
+      onAskAi: (text) => {
+        setComposerText(text);
+        sidecar.runMode({ mode: "ask", text });
+      }
     })
   );
 }
